@@ -397,6 +397,22 @@ module Sossego
     Puma::Server.current&.shutting_down? || false
   end
 
+  # Reports an error Sossego handled instead of raising: a publish that failed
+  # while reporting on a job, a hand-off that failed, a source that failed to
+  # close. Logs it, and hands it to `Rails.error` (with `handled: true` and
+  # source "sossego"), so error trackers subscribed to it see it.
+  #
+  # @param error [Exception]
+  # @param message [String] what was being done, for the log
+  # @param logger [Logger, nil]
+  # @param context [Hash] passed to `Rails.error.report`
+  # @return [nil]
+  def self.report_error(error, message:, logger: nil, **context)
+    logger&.error("#{message}: #{error.class}: #{error.message}")
+    Rails.error.report(error, handled: true, source: "sossego", context: context) if defined?(Rails) && Rails.respond_to?(:error)
+    nil
+  end
+
   # @api private
   def self.fmt_of(event)
     (event.fmt if event.respond_to?(:fmt)) || DEFAULT_FMT

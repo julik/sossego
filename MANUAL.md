@@ -232,7 +232,7 @@ end
 
 A run always ends with `progress_finished`. On a failure, `publish_failure(error)` publishes `error_message` first; the text is `sossego_failure_message(error)`, which you can override to say less. Override `publish_failure` to add to it, for example a `visit` to a page the user can carry on from, calling `super`. A watched job that dies otherwise leaves a spinner turning forever.
 
-The events the concern publishes itself (finished, failure, retrying, close) never raise: a failure is logged, so it can't hide the job's own error. The job's own `stream.publish_*` calls raise like any other call. `stream` is nil when the job was given no stream id, so a job that reports only sometimes writes `stream&.publish_progress(...)`.
+The events the concern publishes itself (finished, failure, retrying, close) never raise. A publish that fails is logged and reported to `Rails.error` (`handled: true`, source `"sossego"`, with the job, stream and event in the context), so it can't hide the job's own error, and you still hear about it. The job's own `stream.publish_*` calls raise like any other call. `stream` is nil when the job was given no stream id, so a job that reports only sometimes writes `stream&.publish_progress(...)`.
 
 To give all your watched jobs the same policy (queue, retries, failure message), wrap it in a concern of your own. Include `Sossego::PublishingHelpers` in the module body, not inside `included do`. That makes it a dependency of your concern, so it sits below your concern in the job's ancestors and your overrides win. Included from `included do`, it lands above your concern and silently replaces them:
 
@@ -263,6 +263,8 @@ else
   head :service_unavailable   # the stream was told: error_message + progress_finished
 end
 ```
+
+The failed hand-off is reported to `Rails.error` too, and so is a publish that fails while telling the stream.
 
 ## Getting the JavaScript into your app
 

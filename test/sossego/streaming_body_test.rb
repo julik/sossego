@@ -683,4 +683,21 @@ class Sossego::StreamingBodyTest < ActiveSupport::TestCase
     refute chunks.any? { |c| c.start_with?("event: ping") },
       "no ping should fire if events are flowing"
   end
+
+  test "a source that fails to close is reported to Rails.error, and the body still ends cleanly" do
+    source = FakeSource.new([[[], "0"]])
+    def source.close
+      raise "connection already gone"
+    end
+    body = Sossego::StreamingBody.new(
+      source: source, logger: nil,
+      max_connected_s: 0, heartbeat_interval_s: 1_000, poll_interval_s: 0,
+      sleeper: NO_SLEEP, clock: -> { 999 }
+    )
+
+    report = assert_error_reported(RuntimeError) { body.each { |_| } }
+
+    assert_equal "connection already gone", report.error.message
+    assert_equal "test:s:m", report.context[:stream_id]
+  end
 end

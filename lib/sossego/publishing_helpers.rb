@@ -25,7 +25,8 @@ module Sossego
   #   `progress_finished` ({#publish_failure}), and the error is raised on.
   #
   # The events this concern publishes itself never raise: a failed one is
-  # logged, so it never masks what the job was trying to report. The job's
+  # logged and reported to `Rails.error` ({Sossego.report_error}), so it never
+  # masks what the job was trying to report. The job's
   # own `stream.publish_*` calls raise like any other call.
   #
   # ## Closing the stream
@@ -142,8 +143,8 @@ module Sossego
     def quietly(event_name)
       yield
     rescue => e
-      logger&.error("[#{self.class.name}] could not publish #{event_name}: #{e.class}: #{e.message}")
-      nil
+      Sossego.report_error(e, message: "[#{self.class.name}] could not publish #{event_name}", logger: logger,
+        job: self.class.name, job_id: job_id, stream_id: stream&.id, event_name: event_name)
     end
   end
 end

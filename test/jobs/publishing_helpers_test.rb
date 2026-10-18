@@ -221,4 +221,22 @@ class Sossego::PublishingHelpersTest < ActiveJob::TestCase
     assert_equal "the real problem", error.message
     assert_equal ["error_message", "progress_finished"], published.map(&:first)
   end
+
+  test "a publish the concern swallows is reported to Rails.error, with the stream and the event" do
+    report = assert_error_reported(RuntimeError) do
+      Sossego::Event.stub(:publish, ->(**) { raise "database is gone" }) do
+        assert_raises(ArgumentError) { FailingJob.perform_now(stream_id: @stream.id) }
+      end
+    end
+
+    assert report.handled?
+    assert_equal "sossego", report.source
+    assert_equal @stream.id, report.context[:stream_id]
+    assert_equal "Sossego::PublishingHelpersTest::FailingJob", report.context[:job]
+    assert_includes %w[error_message progress_finished], report.context[:event_name]
+  end
+
+  test "a job that publishes fine reports nothing" do
+    assert_no_error_reported { WorkingJob.perform_now(stream_id: @stream.id) }
+  end
 end

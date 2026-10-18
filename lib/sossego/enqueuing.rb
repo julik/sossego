@@ -25,7 +25,9 @@ module Sossego
     # Acknowledges on the stream, runs the block, and reports a failure on the
     # same stream if the hand-off does not survive. The acknowledgement
     # doubles as a liveness check: once the user sees it, the stream is known
-    # good and any wait after that belongs to the queue.
+    # good and any wait after that belongs to the queue. A failed hand-off
+    # also goes to `Rails.error` ({Sossego.report_error}), as does a publish
+    # that fails while reporting it.
     #
     # @param stream [Sossego::Stream]
     # @param ack [String, nil] the first `progress` message; nil for none
@@ -35,12 +37,12 @@ module Sossego
       yield
       true
     rescue => e
-      logger&.error("[#{self.class.name}] could not enqueue: #{e.class.name}: #{e.message}")
+      Sossego.report_error(e, message: "[#{self.class.name}] could not enqueue", logger: logger, stream_id: stream.id)
       begin
         stream.publish_error("Could not start the task (#{e.class.name.demodulize}). Please try again.")
         stream.publish_finished
       rescue => publish_error
-        logger&.error("[#{self.class.name}] could not report the failed enqueue: #{publish_error.class}: #{publish_error.message}")
+        Sossego.report_error(publish_error, message: "[#{self.class.name}] could not report the failed enqueue", logger: logger, stream_id: stream.id)
       end
       false
     end

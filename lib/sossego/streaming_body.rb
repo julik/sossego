@@ -270,7 +270,7 @@ module Sossego
         begin
           @source.close
         rescue => e
-          @logger&.error("Sossego streaming body: source.close raised #{e.class}: #{e.message}")
+          Sossego.report_error(e, message: "Sossego streaming body: source.close raised", logger: @logger, stream_id: stream_id)
         end
       end
     end

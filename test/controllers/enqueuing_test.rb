@@ -39,4 +39,31 @@ class Sossego::EnqueuingTest < ActiveSupport::TestCase
 
     assert_empty published
   end
+
+  test "reports a failed hand-off to Rails.error" do
+    report = assert_error_reported(IOError) do
+      Host.new.sossego_enqueue(@stream) { raise IOError, "queue is down" }
+    end
+
+    assert report.handled?
+    assert_equal "sossego", report.source
+    assert_equal @stream.id, report.context[:stream_id]
+  end
+
+  test "reports a publish that fails while reporting the failed hand-off" do
+    calls = 0
+    flaky_publish = ->(**kwargs) {
+      calls += 1
+      raise "database is gone" if calls > 1   # the ack goes through, the error report doesn't
+      Sossego::Event.new(kwargs.except(:transport, :after, :fmt).merge(sseq: 1))
+    }
+
+    reports = capture_error_reports do
+      Sossego::Event.stub(:publish, flaky_publish) do
+        refute Host.new.sossego_enqueue(@stream) { raise IOError, "queue is down" }
+      end
+    end
+
+    assert_equal [IOError, RuntimeError], reports.map { |r| r.error.class }
+  end
 end
