@@ -11,6 +11,7 @@ The [README](README.md) gets you running with Turbo and Stimulus. This is everyt
 - [Getting the JavaScript into your app](#getting-the-javascript-into-your-app)
 - [The JavaScript client](#the-javascript-client)
 - [Stimulus](#stimulus)
+- [Handling your own events](#handling-your-own-events)
 - [Using with React](#using-with-react)
 - [Testing your app](#testing-your-app)
 - [Why SSE and not \<something\>Cable](#why-sse-and-not-somethingcable)
@@ -394,6 +395,92 @@ application.register("sossego-highlight", SossegoHighlightController)
 ```
 
 Fields that fire `sossego:prefilled` pulse one after another, and the first is scrolled into view. `field_prefill` fires the event; your own code can too, after filling a field from a suggestion. The `duration` value defaults to 600 ms, and `event` to `sossego:prefilled`. The color comes from `--sossego-highlight-color`.
+
+## Handling your own events
+
+> **Draft. Julik to review.** This is how I meant it to be used. The two notes at the end are open questions.
+
+### How an event reaches your code
+
+1. **Server.** You publish under a name of your own. You choose the payload format when you publish: a Hash goes as JSON, a String as text, and bytes only when you ask (`fmt: :bytes`, or `"gz:bytes"` to gzip them).
+2. **Wire.** Every one of your events arrives as one SSE frame named `sossego`. Your name (`"poof"`) is inside the frame, next to the format and the payload.
+3. **Decoding.** The client turns the payload back into a value: a JSON value, a string, or a `Uint8Array` for bytes. Gzipped formats are inflated first. Your handler gets the value; there is nothing to decode yourself.
+4. **One at a time.** Each stream has a queue that handles one frame at a time: decode it, run its handler (waiting for it if it returns a promise), then take the next frame. Events always reach you in the order they were published, and a stream never inflates two payloads at once. A page with three streams has three queues.
+5. **Routing.** The handler registered for the event's name runs. There are three ways to register one, below.
+
+### Without TypeScript
+
+Server:
+
+```ruby
+stream.publish("poof", png_bytes, fmt: :bytes)       # or fmt: "gz:bytes" to gzip it
+```
+
+**With the Stimulus controller** (`data-controller="sossego"` already on the page), register a handler once, next to `application.register`:
+
+```js
+import { registerHandler } from "@sossego/stimulus"
+
+registerHandler("poof", (bytes, { controller, event }) => {
+  const img = controller.element.querySelector("img.poof")
+  img.src = URL.createObjectURL(new Blob([bytes], { type: "image/png" }))
+})
+```
+
+**From a Stimulus controller of your own**, with no registration: every event also bubbles up as `sossego:event`.
+
+```erb
+<div data-controller="sossego gallery" data-sossego-url-value="..." data-action="sossego:event->gallery#received">
+```
+
+```js
+received({ detail: { eventName, payload } }) {
+  if (eventName === "poof") this.show(payload)
+}
+```
+
+This is a DOM event, so the stream doesn't wait for your listener. Use `registerHandler` when the next event must wait for this one.
+
+**Without Stimulus:**
+
+```js
+import { createSossegoStream, createDispatcher } from "@sossego/client"
+
+const events = createDispatcher()
+events.on("poof", (bytes, event) => show(bytes))
+createSossegoStream({ url: "/poof_stream", onEvent: events.dispatch })
+```
+
+`registerHandler` can also replace a built-in handler: `registerHandler("progress", …)` takes over progress messages for every controller on the page.
+
+### With TypeScript
+
+The same code. Annotate the payload with what you published:
+
+```ts
+registerHandler("poof", async (bytes: Uint8Array<ArrayBuffer>, { controller }) => { /* ... */ })
+
+events.on<Uint8Array<ArrayBuffer>>("poof", (bytes, event) => { /* ... */ })
+```
+
+Use `Uint8Array<ArrayBuffer>`, not a bare `Uint8Array`. Since TypeScript 5.7 a bare `Uint8Array` could be backed by a `SharedArrayBuffer`, which `Blob` and some other DOM APIs refuse. Decoded bytes are always backed by an ordinary `ArrayBuffer`. JSON payloads take an interface: `events.on<{ id: number }>("comment_added", (c) => c.id)`.
+
+### Async handlers
+
+A handler may be async: it can await a fetch, an animation or a decode. The stream waits for it before handing over the next event. That is how order is kept, and it has a cost: **a slow handler delays every event behind it.** The built-in handlers show this. `progress_finished` waits out its 3 s linger and fade before it returns, `progress_warning` its 5 s, and `field_prefill` 300 ms per field, and the events after them wait too. Moneymaker's client did the same.
+
+How I meant handlers to be written:
+
+- **Await what the next event depends on.** For example, a handler that inserts a row, when the next event updates that row.
+- **Don't await what is only for show.** Start an animation or a timer and return, unless the next event would fight it.
+- **Errors don't stop the stream.** A handler that throws or rejects goes to `onError` (the Stimulus controller logs it), and the next event is handled.
+- **There is no timeout.** A handler that never settles stops its stream. Don't await anything that can hang, like a fetch without a timeout.
+
+### Open questions
+
+- **Types aren't tied to event names.** The payload annotation is your word for it: nothing checks that the server publishes `poof` as bytes. An event map would let TypeScript check and infer it: `createDispatcher<{ poof: Uint8Array<ArrayBuffer>; progress: string }>()`.
+- **The Stimulus registry is global.** It holds one handler per name for every `sossego` controller on the page; for per-element behaviour, use `sossego:event`. Dispatching a DOM event per name as well (`sossego:poof`) would allow `data-action="sossego:poof->gallery#show"`.
+- **The built-in handlers hold the queue while they linger.** They could return once the work is done and let the fade run on its own. Then `sossego:complete` would fire before the bar is gone, rather than after.
 
 ## Using with React
 
