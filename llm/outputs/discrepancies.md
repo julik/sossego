@@ -214,22 +214,22 @@ Moneymaker's redirect flows (`InvoicePrefillJob`, `TransactionClassifyJob`) shou
 ### E2. Event names and DOM contract (Moneymaker → gem)
 | Moneymaker | Gem |
 |---|---|
-| controller `sossego-client`, `data-sossego-client-stream-url-value` | the host registers `sossego/stimulus` under any name (`sossego` in the docs), `data-sossego-url-value` |
+| controller `sossego-client`, `data-sossego-client-stream-url-value` | the host registers `@sossego/stimulus` under any name (`sossego` in the docs), `data-sossego-url-value` |
 | `data-sossego-client-await-task-value`, `sossego:await-task` | `data-sossego-await-task-value`, `sossego:await-task` (unchanged) |
 | `[data-sse-progress]`, `[data-sse-progress-text]` | `[data-sossego-progress]` (its value is the state: `working`/`warning`/`error`/`finished`), `[data-sossego-progress-text]` |
 | CSS classes `ocr-progress-bar--error/--warning/--fading`, `ocr-progress-indicator--stopped`, emoji icon elements injected by JS | state attribute and `data-sossego-fading`; icons come from CSS (see the dummy app's `demo.css`) |
 | `turbo` event, `Turbo.renderStreamMessage` | `turbo_stream` event |
-| `moneymaker:magic` on prefilled inputs, animated by the app's `magic-fields` controller | `sossego:prefilled`, animated by the gem's `sossego/highlight` controller and `sossego/highlight.css` (see E7) |
+| `moneymaker:magic` on prefilled inputs, animated by the app's `magic-fields` controller | `sossego:prefilled`, animated by the gem's `@sossego/highlight` controller and `@sossego/highlight/highlight.css` (see E7) |
 | `sossego:complete`, `sossego:stalled`, `sossego:disconnected`, `sossego:event` | same names; `sossego:event` detail now carries `{eventName, payload, seq, sseq}`; new `sossego:closed` |
 | `event.decodedTextData` / `decodedBinaryData` given to handlers | handlers get `(payload, {controller, event})` with the decoded `pld` |
 | handlers fixed by import | `registerHandler(name, fn)`, or listen to `sossego:event` |
 | global `document.querySelector` for the progress bar | the progress element inside the controller element first, then the document |
 
-**Decided 18 Oct 2026:** all the renames above are accepted: `turbo_stream`, the `data-sossego-*` attributes, and the state as an attribute value. Field highlighting ships as `sossego/highlight` (E7). Moneymaker's side of this is in `~/Code/apps/moneymaker/llm/todos/sossego-migration.md`.
+**Decided 18 Oct 2026:** all the renames above are accepted: `turbo_stream`, the `data-sossego-*` attributes, and the state as an attribute value. Field highlighting ships as `@sossego/highlight` (E7). Moneymaker's side of this is in `~/Code/apps/moneymaker/llm/todos/sossego-migration.md`.
 
 ### E7. Field highlighting (Moneymaker's "magic fields")
 - **Moneymaker:** `magic_fields_controller.js` listens for `moneymaker:magic`. It plays a 600 ms pulse on each field, one at a time, the next starting halfway through, and scrolls the first field into view. Fields are filled by `field_prefill` and also by a plain `fetch` (the VAT suggestion in `expense_form_controller.js`).
-- **Gem:** ships it as a companion controller, `sossego/highlight`, rather than inside the `field_prefill` handler, so non-stream fills use it too.
+- **Gem:** ships it as a companion controller, `@sossego/highlight`, rather than inside the `field_prefill` handler, so non-stream fills use it too.
   - It listens for `sossego:prefilled` by default; the event name is configurable.
   - It marks the field with `data-sossego-highlighted`.
   - `app/assets/stylesheets/sossego/highlight.css` has the same pulse, plus a reduced-motion fallback.
@@ -260,14 +260,14 @@ These are generic enough for the library but not yet in it:
 - the silent-first-frame / three-strikes / fallback-cooldown state machine;
 - `catchUpOwed`.
 
-**Decided 18 Oct 2026:** leave it in Cora for now, and port it when Cora moves to the gem's client, with Cora as the second real user. The architecture, the server contract, a proposed `createSharedStreams` API and the next iterations are in [shared-streams.md](shared-streams.md). Cora's checklist is `~/Code/every/cora/docs/plans/2026-10-18-chore-sossego-gem-migration-plan.md`, section 6. The gem now ships the test helpers both will need, as `sossego/testing` with types.
+**Decided 18 Oct 2026:** leave it in Cora for now, and port it when Cora moves to the gem's client, with Cora as the second real user. The architecture, the server contract, a proposed `createSharedStreams` API and the next iterations are in [shared-streams.md](shared-streams.md). Cora's checklist is `~/Code/every/cora/docs/plans/2026-10-18-chore-sossego-gem-migration-plan.md`, section 6. The gem now ships the test helpers both will need, as `@sossego/testing` with types.
 
 ---
 
 ## F. Packaging questions
 
 - **License:** ~~DECIDE~~ **Decided 18 Oct 2026: MIT.** `LICENSE.md`, gemspec and `package.json` updated.
-- **Names:** `sossego` is free on both RubyGems and npm today. The npm package's add-ons import `"sossego"` by name, so a scoped npm name (`@julik/sossego`) would need those imports changed.
+- **Names:** `sossego` is free on RubyGems. **Decided 18 Oct 2026:** the JavaScript is scoped npm packages: `@sossego/client`, `@sossego/stimulus`, `@sossego/highlight`, `@sossego/react` and `@sossego/testing`, each with its own package.json under `app/javascript/@sossego/`. The add-ons import `@sossego/client` by name. Publishing them needs the `@sossego` npm organization; claim it before going public.
 - **Homepage/repo:** the gemspec points at `github.com/julik/sossego`, which Cora's comments mention. Confirm it exists or should be created.
 - **Rails floor:** `>= 8.0`, because the SQLite lock relies on Rails 8's `BEGIN IMMEDIATE` default. Ruby `>= 3.4`.
 - **Turbo Stream helpers:** Moneymaker's packaging todo wanted `Sossego::TurboStream.replace(stream, target:, partial:)`. The gem has only `publish("turbo_stream", html)`, shown in the board demo, and `Reporting#publish_turbo_stream`. **DECIDE:** add the helpers?
@@ -299,6 +299,6 @@ These are generic enough for the library but not yet in it:
 ### Cora
 1. The table is already the gem's shape. Keep it.
 2. Delete `lib/sossego*` and `app/jobs/sossego/prune_job.rb`. `ClientPush::EventsController` keeps working as a subclass. Its `request.session_options[:skip]` line is now redundant, and harmless.
-3. If it adopts the gem's client: imports change from `@/lib/sossego/*` to `sossego` (or the copied path), and `on`/`dispatch` change to `createDispatcher()`. Gap detection could move from `inboxStreamConnection.ts` to `onGap`.
+3. If it adopts the gem's client: imports change from `@/lib/sossego/*` to `@sossego/client` and `@sossego/testing`, and `on`/`dispatch` change to `createDispatcher()`. Gap detection could move from `inboxStreamConnection.ts` to `onGap`.
 4. `Sossego::PruneJob` no longer sets `queue_as :low`. Set it in an initializer if the queue matters.
 5. Payload formats (A3): run `bin/rails g sossego:install --skip` for the `fmt` column. No Cora caller publishes a String today. Verbatim strings stored by Cora's old code still go out as `text`.

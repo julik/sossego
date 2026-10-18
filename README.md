@@ -2,15 +2,9 @@
 
 *"Sossego, eu preciso de sossego" - Tim Maia, 1977*
 
-Server-Sent Events for Rails, backed by a database table.
+Server-Sent Events for Rails, from a database table. You publish an event and it becomes a row. Each open stream polls for new rows and sends them to the browser, which resumes where it left off after a reconnect. No Redis, no WebSocket server, no `ActionController::Live`. Works on SQLite and PostgreSQL.
 
-Events are rows in an append-only `sossego_events` table. A plain Rack body polls the table for one stream and writes SSE frames. The browser resumes by cursor through `Last-Event-ID`. There is no `ActionController::Live`, no Redis and no pub/sub server, and a server restart loses nothing.
-
-It runs on SQLite and PostgreSQL. The JavaScript client is plain ES modules, so no build step is needed. It comes with a Stimulus controller and a React hook.
-
-The wire format is specified in [WIRE_FORMAT.md](WIRE_FORMAT.md).
-
-## Installation
+## Install
 
 ```ruby
 gem "sossego"
@@ -21,9 +15,7 @@ bin/rails generate sossego:install   # migrations, config/initializers/sossego.r
 bin/rails db:migrate
 ```
 
-After upgrading the gem, run `bin/rails generate sossego:install --skip` to add any migrations you don't have yet.
-
-Schedule the cleanup, for example with Solid Queue:
+Delete old events on a schedule:
 
 ```yaml
 # config/recurring.yml
@@ -32,265 +24,135 @@ sossego_prune:
   schedule: every hour
 ```
 
-Events older than `Sossego.retention` are deleted. The installer sets this to 24 hours in `config/initializers/sossego.rb`. The other settings are listed there too, commented out: a database of its own, the signing verifier, and the Postgres lock timeout. So are recipes for choosing the connection streams poll on (`Sossego.around_poll`). A stream polls on your app's connection by default. The recipes cover a reading role and, for SQLite, `Sossego.poll_on_readonly_sqlite_connection!`, which polls through a read-only copy of the database file.
+With importmap-rails the JavaScript is already pinned: `@sossego/client`, `@sossego/stimulus`, `@sossego/highlight`. Register the Stimulus controller:
 
-## Publishing
-
-```ruby
-stream = Sossego::Stream.for(account, :inbox)   # "account:42:inbox"
-stream.publish("inbox_changed", {count: 3})
-stream.publish("progress", "Halfway there")    # a String goes out as text, as it is
-stream.publish("thumbnail", png, fmt: :bytes)  # bytes are always asked for
-stream.publish("turbo_stream", html, fmt: "gz:text")  # stored and sent gzipped
-stream.publish_close(reason: "finished")        # ends the stream for every client, for good
+```js
+// app/javascript/controllers/index.js
+import SossegoController from "@sossego/stimulus"
+application.register("sossego", SossegoController)
 ```
 
-Each row stores its `fmt` (`ejson`, `text`, `bytes`, or a gzipped `gz:` variant of those), and the client hands over the value it describes: the parsed JSON value, the string, or a `Uint8Array`. Set `compress_above_bytes:` on an endpoint to gzip large payloads as they go out.
+Not on importmap-rails? See [Getting the JavaScript into your app](MANUAL.md#getting-the-javascript-into-your-app).
 
-Within a stream, events arrive in the order they were committed. Each event has a cursor (`seq`, the row id) and a dense per-stream sequence (`sseq`), which clients use to detect gaps. With `after:`, a publish appends only if the stream is where you think it is:
+## Live updates with Turbo Streams
 
-```ruby
-stream.publish("progress", "Queued", after: 0)  # Sossego::Conflict unless the stream is empty
-```
-
-### Publishing from inside a transaction
-
-`publish` writes inside the caller's transaction. A reader can see the event as soon as it commits, but if the transaction rolls back, the event goes with it. To announce a change only once it is visible, use `publish_after_commit`. It waits until every open transaction has committed, and publishes nothing on a rollback:
+Serve a stream. Here, one per account:
 
 ```ruby
-Order.transaction do
-  order.update!(state: "paid")
-  stream.publish_after_commit("order_paid", {id: order.id},
-    on_error: ->(error) { Rails.error.report(error, handled: true) })
-end
-```
+# config/routes.rb
+get "live" => "live_streams#show"
 
-With `on_error`, a publish that fails is handed to the callback and doesn't raise. That suits signals you can afford to lose, like "the inbox changed, refetch". Without `on_error`, the error raises after the commit, and the committed change stands.
-
-## Serving a stream
-
-Subclass `Sossego::StreamsController` and name the stream:
-
-```ruby
-class InboxStreamsController < Sossego::StreamsController
+# app/controllers/live_streams_controller.rb
+class LiveStreamsController < Sossego::StreamsController
   def show
     return refuse_stream("unauthenticated") unless current_user
-    @account = current_user.accounts.find_by(id: params[:account])
-
-    super  # refuses with "forbidden" when sossego_stream returns nil
+    super
   end
 
   protected
 
-  def sossego_stream
-    Sossego::Stream.for(@account, :inbox) if @account
-  end
-
-  def sossego_body_options
-    {ping_first: true, max_backlog: 100, max_open_streams: 16, retry_ms: 2_000..5_000}
-  end
+  def sossego_stream = Sossego::Stream.for(current_user.account, :live)
 end
 ```
 
-An EventSource cannot read an error status. So a refusal is HTTP 200 with a single `close` frame naming the reason, and the client stops instead of reconnecting forever. The stream response never writes the session cookie.
-
-Every open stream holds a Puma thread for up to 30 seconds before the client reconnects. Set Puma's `max_io_threads`: streams mark themselves IO-bound, so they don't take regular request threads. Use the same number for `max_open_streams`.
-
-### Streams for one task
-
-A stream made for a single background job can be handed to the browser signed. The engine serves it:
-
-```ruby
-@stream = Sossego::Stream.random   # "task:k7p2qd9z4m1x:progress"
-```
+Listen on the page:
 
 ```erb
-<div data-controller="sossego" data-sossego-url-value="<%= sossego_signed_stream_path(@stream) %>"></div>
+<div data-controller="sossego" data-sossego-url-value="<%= live_path %>"></div>
 ```
 
-## Background jobs with progress
+Publish Turbo Streams to it:
 
 ```ruby
-class ReceiptOcrJob < ApplicationJob
-  include Sossego::Reporting
-  queue_as :interactive                       # keep it out from behind slow work
-  sossego_retry_on Net::ReadTimeout, attempts: 3
-
-  def perform(receipt_id:, stream_id:)
-    publish_progress("Reading the receipt...")
-    publish_field_prefill("expense[amount]" => "12.50", "expense[currency]" => "EUR")
+class Comment < ApplicationRecord
+  after_create_commit do
+    html = ApplicationController.render(partial: "comments/comment", locals: {comment: self})
+    Sossego::Stream.for(account, :live).publish("turbo_stream",
+      ApplicationController.helpers.turbo_stream_action_tag(:append, target: "comments", template: html))
   end
 end
 ```
 
-Each run ends with `progress_finished`, however it exits. A failure publishes `error_message` first. The spinner never hangs.
+Every open page appends the comment. A page that was offline gets the comments it missed when it reconnects.
 
-### Streams that end
+## A background job with a progress bar
 
-A stored `close` ends a stream for good: every client reading it stops, and none reconnects. A job ends its stream that way with one setting:
+The page makes a stream for the job and listens on it:
 
 ```ruby
-class InvoicePrefillJob < ApplicationJob
-  include Sossego::Reporting
-  self.sossego_close_stream = true   # after progress_finished: close, reason "finished" or "failed"
+def new
+  @stream = Sossego::Stream.random
+end
+
+def create
+  stream = Sossego::Stream.verified_from_url(params[:stream_url]) or return head(:forbidden)
+  ImportJob.perform_later(file_id: params[:file_id], stream_id: stream.id)
+  head :accepted
 end
 ```
 
-Close the stream when it belongs to that one piece of work:
-
-- **One-off tasks with progress.** The page starts a task, gets a `Stream.random` for it, and waits ("Preparing your report..."). When the task is done there is nothing more to hear, and the stream should stop costing a server thread.
-- **Wizards.** Each step runs a job on its own stream and moves on (`publish_visit`) when the job finishes. The next step makes a new stream.
-- **Anything with a natural end**, such as a generation that streams tokens and then completes, or an import that runs once.
-
-Leave it open when a page keeps one stream for several tasks. For example, a form that opens its stream on render and can analyze a second upload after the first: a closed stream hears nothing after the close. Jobs don't close streams unless told to.
-
-Outside jobs, `stream.publish_close(reason: "...")` does the same thing. In the browser, the client calls `onClose(reason, seq)`, and the Stimulus controller fires `sossego:closed`. A refusal from the server is also a close, but with `seq` null.
-
-Controllers that start such jobs can guard the hand-off:
-
-```ruby
-include Sossego::Enqueuing
-
-stream = Sossego::Stream.verified_from_url(params[:stream_url]) or return head(:forbidden)
-sossego_enqueue(stream, ack: "Queued...") { ReceiptOcrJob.perform_later(receipt_id: 1, stream_id: stream.id) }
-```
-
-Other helpers: `publish_warning`, `publish_error`, `publish_visit(url)`, `publish_turbo_stream(html)` and `publish_failure(error)`.
-
-## JavaScript
-
-The client is plain ES modules with `.d.ts` types, and needs no build step. The entry points are:
-
-| Entry point | What it is |
-|---|---|
-| `sossego` | The stream client |
-| `sossego/stimulus` | The Stimulus controller and its handlers |
-| `sossego/highlight` | Highlights the fields `field_prefill` filled |
-| `sossego/react` | `useSossegoStream` |
-| `sossego/testing` | `FakeEventSource` for your tests |
-
-### Getting the JS into your app
-
-How you get it depends on how your app loads JavaScript.
-
-**importmap-rails with Propshaft or Sprockets.** There's nothing to do. The engine adds its files to the asset path and pins `sossego`, `sossego/stimulus`, `sossego/highlight` and `sossego/react`.
-
-**An importmap you write yourself** (served by assiette, say, or hand-rolled). The engine serves the files itself, under the path it's mounted at. Their digested URLs can be cached forever. Merge the helper's entries into your map:
-
-```ruby
-map = {imports: {...your pins...}, integrity: {...}}
-map.merge!(sossego_importmap) { |_key, yours, ours| yours.merge(ours) }  # add also: %w[sossego/react] if needed
-tag.script(map.to_json.html_safe, type: "importmap")
-```
-
 ```erb
-<link rel="stylesheet" href="<%= sossego_asset_path("sossego/highlight.css") %>">
-```
-
-**A JS bundler with node_modules** (esbuild, Vite, webpack). Copy the package from the installed gem into your app, and link to the copy:
-
-```sh
-bin/rails sossego:js:vendor   # copies to vendor/javascript/sossego (DIR= to change)
-```
-
-```json
-"dependencies": { "sossego": "link:./vendor/javascript/sossego" }
-```
-
-Commit the copy. Run `bin/rails sossego:js:vendor` again after each gem upgrade, and add `bin/rails sossego:js:check` to CI: it fails when the copy or `node_modules/sossego` no longer matches the installed gem. The lockfile entry is a relative path, so it is the same on every machine and in Docker builds. There is more on why it works this way in [llm/outputs/js-packaging.md](llm/outputs/js-packaging.md).
-
-### Plain JS
-
-```js
-import { createSossegoStream, createDispatcher } from "sossego"
-
-const events = createDispatcher()
-events.on("inbox_changed", (payload, event) => refresh())
-
-const stream = createSossegoStream({
-  url: "/inbox_stream?account=42",
-  lastEventId: renderedHead,                 // resume from what the page rendered
-  onEvent: events.dispatch,
-  onGap: (event, expectedSseq) => refetchEverything(),
-  onClose: (reason) => fallBackToPolling(reason),
-})
-```
-
-Events reach your handlers in wire order, even when a handler is async. The client reopens stalled or failed connections with backoff.
-
-### Stimulus
-
-```js
-import SossegoController from "sossego/stimulus"
-application.register("sossego", SossegoController)
-```
-
-```erb
-<div data-controller="sossego"
-     data-sossego-url-value="<%= sossego_signed_stream_path(@stream) %>"
-     data-sossego-await-task-value="true">
+<div data-controller="sossego" data-sossego-url-value="<%= sossego_signed_stream_path(@stream) %>">
   <div data-sossego-progress hidden><span data-sossego-progress-text></span></div>
 </div>
+
+<%= form_with url: imports_path do |f| %>
+  <%= hidden_field_tag :stream_url, sossego_signed_stream_path(@stream) %>
+  ...
+<% end %>
 ```
 
-The controller has built-in handlers for the events `Sossego::Reporting` publishes:
+The job reports to it:
 
-| Event | What it does |
-|---|---|
-| `progress` | Shows the message. |
-| `progress_warning` | Shows the warning for a while, then hides it. |
-| `error_message` | Shows the error and keeps it visible. |
-| `progress_finished` | Ends the task. |
-| `field_prefill` | Fills the named fields one by one. |
-| `turbo_stream` | Renders the Turbo Stream HTML. |
-| `visit` | Navigates to the URL. |
+```ruby
+class ImportJob < ApplicationJob
+  include Sossego::Reporting
 
-You can add your own handlers with `registerHandler(name, fn)`, or react to the bubbling `sossego:event` DOM event. The progress element's state (`working`, `warning`, `error` or `finished`) is the value of its `data-sossego-progress` attribute, so you can style it with attribute selectors.
-
-### Highlighting filled fields
-
-`field_prefill` fires `sossego:prefilled` on each field it changes. The `sossego/highlight` controller makes those fields pulse, one after another, and scrolls the first into view:
-
-```js
-import SossegoHighlightController from "sossego/highlight"
-application.register("sossego-highlight", SossegoHighlightController)
+  def perform(file_id:, stream_id:)
+    publish_progress("Reading the file...")
+    rows = Import.new(file_id).run { |n| publish_progress("Imported #{n} rows...") }
+    publish_turbo_stream(render_summary(rows))
+  end
+end
 ```
 
-```erb
-<%= stylesheet_link_tag "sossego/highlight" %>
-<form data-controller="sossego-highlight">...</form>
+The progress element shows each message. When the job finishes, or fails with an error message, the bar settles. Its `data-sossego-progress` attribute is set to `working`, `warning`, `error` or `finished`; style it with attribute selectors. The job can also fill in a form (`publish_field_prefill`) or send the browser elsewhere (`publish_visit`).
+
+## One-off named streams
+
+Most streams are named after a record and live as long as it does: `account:42:live`, the account's live updates. A one-off stream exists for a single piece of work. A random name is enough to identify it, and nobody needs it once the work is done.
+
+```ruby
+stream = Sossego::Stream.random              # "task:k7p2qd9z4m1x:progress"
+Sossego::Stream.random(:tokens, namespace: :generation)
 ```
 
-To highlight a field your own code filled, dispatch `sossego:prefilled` on it.
+The page that made it is the only one that knows its name. Hand it to the browser signed, and the engine serves it with no controller of your own: `sossego_signed_stream_path(stream)` gives `/sossego/streams/task:k7p2qd9z4m1x:progress?sig=...`. A signature can expire (`stream.signature(expires_in: 1.hour)`). When the browser sends the URL back, for example with the form that starts the job, `Sossego::Stream.verified_from_url` returns the stream, or nil if the signature doesn't match.
 
-### React
+The work may start before the browser connects, as when a job is enqueued and the response redirects to a page that waits for it. That's fine: a connection without a cursor replays the stream from its first event, so nothing published in between is lost. Add `data-sossego-await-task-value="true"` to the waiting element, and the page reports a job that never sends anything.
 
-```js
-import { useSossegoStream } from "sossego/react"
-const { status } = useSossegoStream({ url, onEvent: (e) => console.log(e.eventName, e.payload) })
+When the work is over, close the stream, so every page reading it stops listening and the server stops holding a thread for it:
+
+```ruby
+stream.publish_close(reason: "finished")
+
+class ImportJob < ApplicationJob
+  include Sossego::Reporting
+  self.sossego_close_stream = true   # closes the stream after the job's last event, success or failure
+end
 ```
 
-## Demos
+Don't close a stream that a page keeps for more than one task: after a close, nobody hears anything published to it. Old events are deleted by `Sossego::PruneJob` with everything else.
 
-The dummy app is also a set of demos:
+## Why Sossego and not ActionCable?
 
-- a job filling in a form, with progress;
-- a job that redirects when it is done;
-- a chat using only the plain JS client;
-- a Turbo Streams board.
+*To be written.*
 
-```sh
-bundle install
-cd test/dummy && bin/rails db:prepare && bin/rails server
-```
+## More
 
-## Development
-
-```sh
-bundle exec rake          # minitest (SQLite) + standardrb
-DATABASE_URL=postgres://localhost/sossego_test bundle exec rake test
-npm install && npx vitest run
-```
+- [MANUAL.md](MANUAL.md): publishing in detail, serving and configuring streams, jobs, the JavaScript client, React and Inertia, how events are stored, and why SSE.
+- [WIRE_FORMAT.md](WIRE_FORMAT.md): what goes over the wire, for writing another client or server.
+- The dummy app in `test/dummy` is a set of runnable demos: `cd test/dummy && bin/rails db:prepare && bin/rails server`.
 
 ## License
 

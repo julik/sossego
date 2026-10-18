@@ -6,7 +6,7 @@
  * Register it under any name; the examples use "sossego":
  *
  *   import { application } from "controllers/application"
- *   import SossegoController from "sossego/stimulus"
+ *   import SossegoController from "@sossego/stimulus"
  *   application.register("sossego", SossegoController)
  *
  *   <div data-controller="sossego"
@@ -47,7 +47,7 @@
  * slow LLM request, say.
  */
 import { Controller } from "@hotwired/stimulus"
-import { createSossegoStream } from "sossego"
+import { createSossegoStream } from "@sossego/client"
 
 // For a value inside a double-quoted attribute selector.
 const quoted = (value) => String(value).replace(/["\\]/g, "\\$&")
@@ -144,7 +144,7 @@ function setFieldValue(input, value) {
  * `{controller, event}`; it may return a Promise, and the next event waits
  * for it.
  *
- * @type {Record<string, (payload: any, context: {controller: SossegoController, event: import("sossego").SossegoEvent}) => void | Promise<void>>}
+ * @type {Record<string, (payload: any, context: {controller: SossegoController, event: import("@sossego/client").SossegoEvent}) => void | Promise<void>>}
  */
 export const handlers = {
   // Payload: the message to show.
@@ -230,7 +230,7 @@ export const handlers = {
  * Add or replace the handler for an event name, for every controller.
  *
  * @param {string} eventName
- * @param {(payload: any, context: {controller: SossegoController, event: import("sossego").SossegoEvent}) => void | Promise<void>} handler
+ * @param {(payload: any, context: {controller: SossegoController, event: import("@sossego/client").SossegoEvent}) => void | Promise<void>} handler
  */
 export function registerHandler(eventName, handler) {
   handlers[eventName] = handler

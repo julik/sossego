@@ -1,60 +1,10 @@
 {
-  "name": "sossego",
-  "version": "0.1.0",
-  "description": "Client for Sossego, Server-Sent Events backed by a database table",
-  "license": "MIT",
-  "type": "module",
-  "main": "./app/javascript/sossego.js",
-  "types": "./app/javascript/sossego.d.ts",
-  "exports": {
-    ".": {
-      "types": "./app/javascript/sossego.d.ts",
-      "default": "./app/javascript/sossego.js"
-    },
-    "./stimulus": {
-      "types": "./app/javascript/sossego/stimulus.d.ts",
-      "default": "./app/javascript/sossego/stimulus.js"
-    },
-    "./react": {
-      "types": "./app/javascript/sossego/react.d.ts",
-      "default": "./app/javascript/sossego/react.js"
-    },
-    "./highlight": {
-      "types": "./app/javascript/sossego/highlight.d.ts",
-      "default": "./app/javascript/sossego/highlight.js"
-    },
-    "./highlight.css": "./app/assets/stylesheets/sossego/highlight.css",
-    "./testing": {
-      "types": "./app/javascript/sossego/testing.d.ts",
-      "default": "./app/javascript/sossego/testing.js"
-    }
-  },
-  "files": [
-    "LICENSE.md",
-    "app/javascript/sossego.js",
-    "app/javascript/sossego.d.ts",
-    "app/javascript/sossego/stimulus.js",
-    "app/javascript/sossego/react.js",
-    "app/javascript/sossego/highlight.js",
-    "app/assets/stylesheets/sossego/highlight.css",
-    "app/javascript/sossego/testing.js",
-    "app/javascript/sossego/react.d.ts",
-    "app/javascript/sossego/testing.d.ts",
-    "app/javascript/sossego/stimulus.d.ts",
-    "app/javascript/sossego/highlight.d.ts"
+  "name": "sossego-workspace",
+  "private": true,
+  "description": "Development workspace for the @sossego/* packages in app/javascript/@sossego",
+  "workspaces": [
+    "app/javascript/@sossego/*"
   ],
-  "peerDependencies": {
-    "@hotwired/stimulus": ">=3",
-    "react": ">=18"
-  },
-  "peerDependenciesMeta": {
-    "@hotwired/stimulus": {
-      "optional": true
-    },
-    "react": {
-      "optional": true
-    }
-  },
   "scripts": {
     "test": "vitest run"
   },

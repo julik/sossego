@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest"
 
-import { createDispatcher } from "sossego"
+import { createDispatcher } from "@sossego/client"
 
 describe("createDispatcher", () => {
   it("routes events by eventName to the registered handler", () => {

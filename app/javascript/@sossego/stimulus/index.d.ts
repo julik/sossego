@@ -1,5 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
-import type { SossegoEvent } from "sossego"
+import type { SossegoEvent } from "@sossego/client"
 
 export interface SossegoHandlerContext {
   controller: SossegoController

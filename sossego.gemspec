@@ -18,7 +18,7 @@ Gem::Specification.new do |spec|
   spec.metadata["source_code_uri"] = spec.homepage
 
   spec.files = Dir.chdir(__dir__) do
-    Dir["{app,config,lib}/**/*", "README.md", "LICENSE.md", "WIRE_FORMAT.md", "package.json"].reject { |f| f.end_with?(".test.js") }
+    Dir["{app,config,lib}/**/*", "README.md", "MANUAL.md", "LICENSE.md", "WIRE_FORMAT.md"].reject { |f| f.end_with?(".test.js") }
   end
   spec.require_paths = ["lib"]
 

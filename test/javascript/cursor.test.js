@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { compareCursors, maxCursor } from "sossego"
+import { compareCursors, maxCursor } from "@sossego/client"
 
 describe("compareCursors", () => {
   it("orders decimal cursors of different lengths by length", () => {

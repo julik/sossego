@@ -240,7 +240,7 @@ Sossego.decode_frame(data_text)
 ## 8. The client
 
 ```js
-import { createSossegoStream, compareCursors, registerPayloadDecoder, decodeFrame } from "sossego"
+import { createSossegoStream, compareCursors, registerPayloadDecoder, decodeFrame } from "@sossego/client"
 
 const stream = createSossegoStream({
   url: "/inbox_stream?account=42",

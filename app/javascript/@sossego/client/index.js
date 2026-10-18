@@ -7,7 +7,7 @@
  * sossego.d.ts for TypeScript consumers.
  *
  * @example Resume from a known cursor and learn why the stream ended
- *   import { createSossegoStream } from "sossego"
+ *   import { createSossegoStream } from "@sossego/client"
  *
  *   const stream = createSossegoStream({
  *     url: "/inbox_stream?account=42",
@@ -20,7 +20,7 @@
  *   stream.close()
  *
  * @example Route events by name
- *   import { createSossegoStream, createDispatcher } from "sossego"
+ *   import { createSossegoStream, createDispatcher } from "@sossego/client"
  *   const events = createDispatcher()
  *   events.on("inbox_changed", () => refresh())
  *   createSossegoStream({ url, onEvent: events.dispatch })

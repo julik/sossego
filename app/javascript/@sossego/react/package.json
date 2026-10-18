@@ -1,0 +1,25 @@
+{
+  "name": "@sossego/react",
+  "version": "0.1.0",
+  "description": "React hook for Sossego streams",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "files": [
+    "index.js",
+    "index.d.ts"
+  ],
+  "peerDependencies": {
+    "@sossego/client": "0.1.0",
+    "react": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/julik/sossego"
+  }
+}

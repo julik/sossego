@@ -8,14 +8,14 @@
  *   state.status // "connecting" | "open" | "reconnecting" | "closed"
  */
 import { useEffect, useRef, useState } from "react"
-import { createSossegoStream } from "sossego"
+import { createSossegoStream } from "@sossego/client"
 
 const CLOSED = { status: "closed", lastEventId: null }
 
 /**
- * @param {import("sossego").SossegoStreamOptions & { enabled?: boolean }} opts
+ * @param {import("@sossego/client").SossegoStreamOptions & { enabled?: boolean }} opts
  *   `enabled` defaults to true; set it false to pause without unmounting
- * @returns {import("sossego").SossegoStreamState}
+ * @returns {import("@sossego/client").SossegoStreamState}
  */
 export function useSossegoStream(opts) {
   const [state, setState] = useState({ status: "connecting", lastEventId: null })

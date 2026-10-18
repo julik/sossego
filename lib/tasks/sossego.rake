@@ -2,32 +2,37 @@
 
 namespace :sossego do
   namespace :js do
-    vendored_dir = -> { Rails.root.join(ENV.fetch("DIR", "vendor/javascript/sossego")) }
+    vendor_dir = -> { Rails.root.join(ENV.fetch("DIR", "vendor/javascript")) }
 
-    desc "Copy the JS client from the installed gem into vendor/javascript/sossego (or DIR=), for a package.json `link:` dependency"
+    desc "Copy the @sossego/* packages from the installed gem into vendor/javascript/@sossego (DIR= to change), for package.json `link:` dependencies"
     task :vendor do
-      dir = vendored_dir.call
-      Sossego.package.copy_to(dir)
-      puts "Copied sossego #{Sossego.package.version} to #{dir.relative_path_from(Rails.root)}"
+      dir = vendor_dir.call
+      Sossego.javascript.copy_to(dir)
+      relative = dir.relative_path_from(Rails.root)
+      puts "Copied #{Sossego.javascript.package_names.join(", ")} #{Sossego.javascript.version} to #{relative}/@sossego"
 
       # A symlink, so node_modules can't keep an old copy. npm has no `link:`, but its `file:` is a symlink
-      relative = dir.relative_path_from(Rails.root)
-      spec = Rails.root.join("package-lock.json").file? ? "file:./#{relative}" : "link:./#{relative}"
+      protocol = Rails.root.join("package-lock.json").file? ? "file" : "link"
       host_manifest = Rails.root.join("package.json")
-      deps = host_manifest.file? ? JSON.parse(host_manifest.read).fetch("dependencies", {}) : {}
-      unless deps["sossego"].to_s.end_with?(":./#{relative}")
-        puts %(Add "sossego": "#{spec}" to "dependencies" in package.json, then install.)
+      manifest = host_manifest.file? ? JSON.parse(host_manifest.read) : {}
+      declared = manifest.fetch("dependencies", {}).merge(manifest.fetch("devDependencies", {}))
+      missing = Sossego.javascript.package_names.reject { |name| declared.key?(name) }
+      if missing.any?
+        puts "Add the ones you use to package.json, then install (@sossego/testing under devDependencies):"
+        missing.each { |name| puts %(  "#{name}": "#{protocol}:./#{relative}/#{name}") }
       end
     end
 
-    desc "Fail if the vendored JS client, or the copy in node_modules, differs from the installed gem"
+    desc "Fail if the vendored @sossego/* packages, or those in node_modules, differ from the installed gem"
     task :check do
-      stale = [vendored_dir.call, Rails.root.join("node_modules/sossego")].filter_map do |dir|
-        next unless dir.exist?
-        files = Sossego.package.stale_files(dir)
+      dirs = [vendor_dir.call, Rails.root.join("node_modules")]
+      stale = dirs.filter_map do |dir|
+        names = Sossego.javascript.present_in(dir)
+        next if names.empty?
+        files = Sossego.javascript.stale_files(dir, names)
         [dir.relative_path_from(Rails.root), files] if files.any?
       end
-      stale.each { |dir, files| warn "#{dir} differs from sossego #{Sossego.package.version}: #{files.join(", ")}" }
+      stale.each { |dir, files| warn "#{dir} differs from sossego #{Sossego.javascript.version}: #{files.join(", ")}" }
       abort "Run bin/rails sossego:js:vendor, then your package manager's install" if stale.any?
     end
   end

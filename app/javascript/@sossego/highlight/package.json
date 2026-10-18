@@ -1,0 +1,26 @@
+{
+  "name": "@sossego/highlight",
+  "version": "0.1.0",
+  "description": "Stimulus controller that highlights fields Sossego (or your code) filled in",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./highlight.css": "./highlight.css"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "highlight.css"
+  ],
+  "peerDependencies": {
+    "@hotwired/stimulus": ">=3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/julik/sossego"
+  }
+}

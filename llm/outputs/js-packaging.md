@@ -1,12 +1,14 @@
 # Shipping sossego's JavaScript to host apps
 
+> **Update, 18 Oct 2026:** the client is now five scoped packages under `app/javascript/@sossego/` (`@sossego/client`, `/stimulus`, `/highlight`, `/react`, `/testing`), each with its own package.json, instead of one `sossego` package with subpaths. `Sossego::Package` became `Sossego::JavaScript`. Engine URLs are `/sossego/js/<digest>/@sossego/<name>/index.js`. `sossego:js:vendor` writes `vendor/javascript/@sossego/<name>` and prints one `link:` line per package. The mechanisms below are unchanged; tested again with yarn 1 and npm plus esbuild. Each bundle has a single copy of `@sossego/client`. Older names below are as they were when this was written. [MANUAL.md](../../MANUAL.md#getting-the-javascript-into-your-app) is current.
+
 ## The problem
 
 The gem carries a small JS client: plain ES modules with hand-written `.d.ts`, no build step, and no runtime npm dependencies (only optional peers: `@hotwired/stimulus`, `react`). Three kinds of host need it:
 
 1. **importmap-rails + Propshaft** (the dummy app). Works today: the engine adds `app/javascript` to the asset paths and registers `config/importmap.rb`.
 2. **Plain importmap, no importmap-rails** (Moneymaker: assiette serves the app's files, `ExternalAssetsHelper#external_importmap_tag` writes the map by hand). The engine's pins don't apply. The plan in `moneymaker/llm/todos/sossego-migration.md` §6 adds two assiette directory mappings into the gem's install path and hand-written pins.
-3. **A bundler with node_modules** (Cora: esbuild via jsbundling-rails, yarn 1.22, vitest, `tsc --noEmit`). Needs `import ... from "sossego"` to resolve in esbuild, vitest and tsc. The plan in Cora's `docs/plans/2026-10-18-chore-sossego-gem-migration-plan.md` §5 says `"sossego": "github:julik/sossego"` or a `file:` path.
+3. **A bundler with node_modules** (Cora: esbuild via jsbundling-rails, yarn 1.22, vitest, `tsc --noEmit`). Needs `import ... from "@sossego/client"` to resolve in esbuild, vitest and tsc. The plan in Cora's `docs/plans/2026-10-18-chore-sossego-gem-migration-plan.md` §5 says `"sossego": "github:julik/sossego"` or a `file:` path.
 
 What makes 3 awkward: the gem's files live wherever Bundler put them, and that path is versioned (`.../gems/sossego-0.1.0`, or `.../bundler/gems/sossego-<sha>` for a Git source), differs between a laptop, CI and the Docker image, and changes on every `bundle update`. Anything that writes that path into a committed file (package.json, yarn.lock, tsconfig) breaks on the next machine or the next upgrade. And whatever route the JS takes, the npm side and the gem side are two pins of the same code that can drift apart.
 
@@ -67,7 +69,7 @@ A task that resolves `Sossego.package.root` (= `Gem.loaded_specs["sossego"].full
 
 - **Writing that path into package.json** (`file:` or `link:` to the gem dir): machine-specific and version-specific, so the committed package.json and yarn.lock are wrong on the next machine and after `bundle update`; with yarn 1 `file:` it can't even go through a stable symlink. Peers don't resolve through a symlink into the gem dir (above). Rejected.
 - **A stable symlink in the app** (`vendor/gems/sossego -> <gem path>`, gitignored, recreated by a task after every `bundle install` on every machine and in Docker), plus `link:./vendor/gems/sossego`. Keeps the lockfile stable, but every build environment must run Ruby before the JS install, and peers still resolve from the gem dir. Too many moving parts.
-- **Vendoring a copy** (`bin/rails sossego:js:vendor` copies the package into `vendor/javascript/sossego`, committed; package.json has `"sossego": "link:./vendor/javascript/sossego"`). This is importmap-rails' `vendor/javascript` idea applied to node_modules. The path in package.json is relative and stable; CI and Docker need no Ruby for the JS install; peers, types and vitest work because the real path is inside the app; the copy is reviewable in diffs. Drift between the copy and the gem is caught by `bin/rails sossego:js:check`. **Prototyped.**
+- **Vendoring a copy** (`bin/rails sossego:js:vendor` copies the package into `vendor/javascript/@sossego`, committed; package.json has `"@sossego/client": "link:./vendor/javascript/@sossego/client"`). This is importmap-rails' `vendor/javascript` idea applied to node_modules. The path in package.json is relative and stable; CI and Docker need no Ruby for the JS install; peers, types and vitest work because the real path is inside the app; the copy is reviewable in diffs. Drift between the copy and the gem is caught by `bin/rails sossego:js:check`. **Prototyped.**
   - Upgrades: `bundle update sossego && bin/rails sossego:js:vendor`, commit. yarn.lock doesn't change.
   - `bundle update` alone: the app keeps running the old JS until `vendor` runs; `check` (in CI) fails until it does.
   - Types: the `.d.ts` files come along. vitest: works.
@@ -80,8 +82,8 @@ The same as (b)'s vendoring, but scanning `Bundler.load.specs` for gems that opt
 
 The engine serves its own package files at `/<mount>/js/<content digest>/<path>`, `Cache-Control: immutable`, 404 for any other digest or any file not in package.json's `exports`. Two view helpers:
 
-- `sossego_importmap` → `{imports: {"sossego" => "/sossego/js/…/app/javascript/sossego.js", "sossego/stimulus" => …}, integrity: {url => "sha384-…"}}`, to merge into an importmap the app already renders;
-- `sossego_asset_path("sossego/highlight.css")` → the digested path of any exported file.
+- `sossego_importmap` → `{imports: {"sossego" => "/sossego/js/…/app/javascript/sossego.js", "@sossego/stimulus" => …}, integrity: {url => "sha384-…"}}`, to merge into an importmap the app already renders;
+- `sossego_asset_path("@sossego/highlight/highlight.css")` → the digested path of any exported file.
 
 - Upgrades: nothing to do; URLs change with content.
 - `bundle update`: nothing breaks; the gem path is read at runtime on the machine that serves.
@@ -116,7 +118,7 @@ Reasons:
 
 Changed in the gem (not committed):
 
-- `lib/sossego/package.rb` (new): `Sossego::Package`, reading the root package.json. `#modules` (exports → `{"sossego/stimulus" => "app/javascript/sossego/stimulus.js", …}`), `#files`, `#digest`/`#integrity` (cached per mtime, so a path gem being edited gets new URLs without a restart), `#call` (the Rack endpoint), `#copy_to(dir)`, `#stale_files(dir)`. `Sossego.package` is the gem's instance.
+- `lib/sossego/package.rb` (new): `Sossego::Package`, reading the root package.json. `#modules` (exports → `{"@sossego/stimulus" => "app/javascript/sossego/stimulus.js", …}`), `#files`, `#digest`/`#integrity` (cached per mtime, so a path gem being edited gets new URLs without a restart), `#call` (the Rack endpoint), `#copy_to(dir)`, `#stale_files(dir)`. `Sossego.package` is the gem's instance.
 - `lib/sossego.rb`: requires it.
 - `config/routes.rb`: `get "js/:digest/*path"` → `Sossego.package`, named `package_file`.
 - `app/helpers/sossego/importmap_helper.rb` (new): `sossego_asset_path`, `sossego_importmap`.
@@ -141,7 +143,7 @@ end
 ```
 
 ```erb
-<link rel="stylesheet" href="<%= sossego_asset_path("sossego/highlight.css") %>">
+<link rel="stylesheet" href="<%= sossego_asset_path("@sossego/highlight/highlight.css") %>">
 ```
 
 That replaces the two `additional_directory_mappings` and the manual pins in §6 of the migration plan. The engine must be mounted (the installer mounts it at `/sossego`). `assiette_modulepreload_tags` won't list these modules; a `sossego_modulepreload_tags` would be a few lines if wanted.
@@ -153,24 +155,24 @@ bin/rails sossego:js:vendor          # writes vendor/javascript/sossego
 ```
 
 ```json
-"sossego": "link:./vendor/javascript/sossego"
+"@sossego/client": "link:./vendor/javascript/@sossego/client"
 ```
 
-Then `yarn install`, commit `vendor/javascript/sossego`, package.json and yarn.lock (the yarn.lock entry is `version "0.0.0"`, path only, and won't change on upgrades). Add `bin/rails sossego:js:check` to CI. The Dockerfile needs nothing: yarn creates the symlink before `COPY . .` brings the target in (verified: a dangling `link:` target passes `--frozen-lockfile`). esbuild, vitest and `tsc` resolve the package and its peers from the app's `node_modules`; verified with copies of the real files in a scratch app.
+Then `yarn install`, commit `vendor/javascript/@sossego`, package.json and yarn.lock (the yarn.lock entry is `version "0.0.0"`, path only, and won't change on upgrades). Add `bin/rails sossego:js:check` to CI. The Dockerfile needs nothing: yarn creates the symlink before `COPY . .` brings the target in (verified: a dangling `link:` target passes `--frozen-lockfile`). esbuild, vitest and `tsc` resolve the package and its peers from the app's `node_modules`; verified with copies of the real files in a scratch app.
 
 To see it locally without Cora: in `test/dummy`, `DIR=/some/tmp/app/vendor/javascript/sossego bin/rails sossego:js:vendor`, then in that app add the `link:` line and `yarn install`.
 
 ## Changed after review (18 Oct 2026)
 
-- `sossego_importmap` maps only `sossego`, `sossego/stimulus` and `sossego/highlight`. `sossego/react` is opt-in (`sossego_importmap(also: %w[sossego/react])`), and `sossego/testing` is never mapped by default. An unknown specifier raises `KeyError`.
-- The engine's importmap-rails pin for `sossego/react` is `preload: false`, so pages that don't pin React don't try to preload it.
-- `sossego/stimulus` and `sossego/highlight` now have `.d.ts` files, listed in `exports` and `files`. A strict `tsc` consumer of all five entry points type-checks.
+- `sossego_importmap` maps only `sossego`, `@sossego/stimulus` and `@sossego/highlight`. `@sossego/react` is opt-in (`sossego_importmap(also: %w[sossego/react])`), and `@sossego/testing` is never mapped by default. An unknown specifier raises `KeyError`.
+- The engine's importmap-rails pin for `@sossego/react` is `preload: false`, so pages that don't pin React don't try to preload it.
+- `@sossego/stimulus` and `@sossego/highlight` now have `.d.ts` files, listed in `exports` and `files`. A strict `tsc` consumer of all five entry points type-checks.
 - The README has a "Getting the JS into your app" section with the three host styles.
 
 ## Open questions
 
 - Engine-served URLs are paths, not `asset_host` URLs. If Moneymaker puts a CDN in front of assets later, the helper would need `sossego.package_file_url` with a host.
 - Should a stale vendored copy also warn at boot in development (Shakapacker-style), or is the CI check enough?
-- Cora runs `knip`; whether it flags `vendor/javascript/sossego` or the `link:` dependency is unknown.
+- Cora runs `knip`; whether it flags `vendor/javascript/@sossego` or the `link:` dependency is unknown.
 - pnpm, yarn berry and Bun behaviour is from their docs, not tested here. Vendoring inside the app should make the copy-vs-symlink difference irrelevant for all of them.
 - For (a): whether to publish to npm while the GitHub repo is private, and whether a `github:` tag is acceptable for Cora's Docker build (it would need Git credentials for yarn).
