@@ -180,7 +180,7 @@ Don't close a stream that a page keeps for more than one task: after a close, no
 
 - [MANUAL.md](MANUAL.md): publishing in detail, serving and configuring streams, jobs, the JavaScript client, React and Inertia, how events are stored, and why SSE.
 - [WIRE_FORMAT.md](WIRE_FORMAT.md): what goes over the wire, for writing another client or server.
-- The dummy app in `test/dummy` is a set of runnable demos: `cd test/dummy && bin/rails db:prepare && bin/rails server`.
+- `bin/dev` runs the demos: a job filling a form in with progress, the plain JS client, and Turbo Streams, on SQLite. Clone, `bundle install`, `bin/dev`. No Node needed.
 
 ## License
 

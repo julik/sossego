@@ -1,0 +1,38 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Runs the demos: the dummy app in test/dummy, on SQLite, with the JavaScript
+# served by importmap-rails and Propshaft straight from the gems. No Node, no
+# build step.
+#
+#   bin/dev              # http://localhost:3000
+#   PORT=4000 bin/dev
+#   BIND=0.0.0.0 bin/dev # reachable from other devices on the network
+
+root = File.expand_path("..", __dir__)
+ENV["BUNDLE_GEMFILE"] ||= File.join(root, "Gemfile")
+Dir.chdir(File.join(root, "test/dummy"))
+
+def run!(*command)
+  system(*command) || abort("bin/dev: `#{command.join(" ")}` failed")
+end
+
+system("bundle", "check", out: File::NULL) || run!("bundle", "install")
+run!("bin/rails", "db:prepare")
+
+port = ENV.fetch("PORT", "3000")
+bind = ENV.fetch("BIND", "127.0.0.1")
+base = "http://#{(bind == "0.0.0.0") ? "localhost" : bind}:#{port}"
+
+puts <<~BANNER
+
+  Sossego demos (open each in two tabs to see the streams shared):
+
+    #{base}/progress   a job fills a form in, with a progress bar and field highlights
+    #{base}/chat       the plain JS client: cursor, gaps, pings, gzipped messages
+    #{base}/board      Turbo Streams published from the server
+
+BANNER
+
+$stdout.flush # exec would drop what is still buffered when stdout is not a terminal
+exec("bin/rails", "server", "-p", port, "-b", bind)
