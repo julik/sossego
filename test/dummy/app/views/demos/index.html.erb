@@ -1,0 +1,18 @@
+<h1>Sossego demos</h1>
+<p>Server-Sent Events from a database table. Open each demo in two tabs to see the streams shared.</p>
+<ul class="demos">
+  <li>
+    <%= link_to "Progress", progress_path %>:
+    a background job fills a form in and reports progress, over a signed random stream and the
+    <code>sossego/stimulus</code> controller. Also a job that ends by sending the browser to another page.
+  </li>
+  <li>
+    <%= link_to "Chat", chat_path %>:
+    <code>createSossegoStream</code> on its own, with no framework. Shows the cursor, gaps, pings,
+    gzipped payloads and closing a stream for good.
+  </li>
+  <li>
+    <%= link_to "Turbo Streams", board_path %>:
+    the server renders <code>&lt;turbo-stream&gt;</code> elements and publishes them; every open board applies them.
+  </li>
+</ul>

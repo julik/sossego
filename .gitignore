@@ -1,0 +1,14 @@
+/.bundle/
+/pkg/
+/tmp/
+/node_modules/
+/test/dummy/log/*.log
+/test/dummy/log/*.out
+/test/dummy/storage/
+/test/dummy/tmp/
+/test/dummy/db/*.sqlite3*
+Gemfile.lock
+package-lock.json
+*.sqlite3
+*.sqlite3-*
+/.playwright-mcp/

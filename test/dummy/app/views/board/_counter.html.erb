@@ -1,0 +1,5 @@
+<div class="counter" id="<%= dom_id(counter) %>">
+  <span class="name"><%= counter.name %></span>
+  <span class="value"><%= counter.value %></span>
+  <%= button_to "+1", bump_counter_path(counter), form: {data: {turbo: true}} %>
+</div>

@@ -1,0 +1,29 @@
+<h1>Chat, with the plain JS client</h1>
+<p>Open this page in two tabs. This page uses <code>createSossegoStream</code> and nothing else.</p>
+
+<div id="chat" data-stream-url="<%= chat_stream_path %>" data-head="<%= @head %>"
+     data-messages-url="<%= chat_messages_path %>" data-close-url="<%= close_chat_path %>">
+  <dl class="status">
+    <dt>Connection</dt><dd data-status>connecting</dd>
+    <dt>Cursor</dt><dd data-cursor><%= @head %></dd>
+    <dt>Server head</dt><dd data-head><%= @head %></dd>
+    <dt>Last ping</dt><dd data-ping>-</dd>
+  </dl>
+
+  <ol class="messages" data-messages>
+    <% @messages.each do |event| %>
+      <% message = event.value %>
+      <li><b><%= message["author"] %></b> <%= message["text"] %> <small>#<%= event.sseq %></small></li>
+    <% end %>
+  </ol>
+  <p class="notice" data-notice hidden></p>
+
+  <form data-form>
+    <input name="author" placeholder="Your name" size="12">
+    <input name="text" placeholder="Say something" autocomplete="off" size="40">
+    <button>Send</button>
+    <button type="button" data-close>Close the stream for everyone</button>
+  </form>
+</div>
+
+<script type="module">import "chat"</script>

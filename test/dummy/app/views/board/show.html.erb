@@ -1,0 +1,15 @@
+<h1>Turbo Streams over Sossego</h1>
+<p>
+  "+1" updates the counter on the server, which publishes a <code>&lt;turbo-stream&gt;</code> on the board's stream.
+  The response to the click is empty: this tab updates the same way the others do.
+</p>
+
+<div data-controller="sossego"
+     data-sossego-url-value="<%= board_stream_path %>"
+     data-sossego-last-event-id-value="<%= @head %>">
+  <div class="board">
+    <% @counters.each do |counter| %>
+      <%= render "board/counter", counter: counter %>
+    <% end %>
+  </div>
+</div>

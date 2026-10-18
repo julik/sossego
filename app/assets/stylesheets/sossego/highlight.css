@@ -1,0 +1,30 @@
+/* The pulse for fields sossego/highlight marks. Override the colour with
+   --sossego-highlight-color; the duration follows the controller's. */
+[data-sossego-highlighted] {
+  animation: sossego-highlight var(--sossego-highlight-duration, 600ms) ease-out;
+}
+
+@keyframes sossego-highlight {
+  0% {
+    background-color: color-mix(in srgb, var(--sossego-highlight-color, rgb(0, 102, 204)) 25%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--sossego-highlight-color, rgb(0, 102, 204)) 30%, transparent);
+    transform: scale(1);
+  }
+  50% {
+    background-color: color-mix(in srgb, var(--sossego-highlight-color, rgb(0, 102, 204)) 15%, transparent);
+    box-shadow: 0 0 8px 2px color-mix(in srgb, var(--sossego-highlight-color, rgb(0, 102, 204)) 20%, transparent);
+    transform: scale(1.1);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-sossego-highlighted] {
+    animation: none;
+    outline: 2px solid var(--sossego-highlight-color, rgb(0, 102, 204));
+  }
+}

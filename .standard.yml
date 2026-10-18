@@ -1,0 +1,4 @@
+ruby_version: 3.4
+ignore:
+  - 'test/dummy/db/schema.rb'
+  - 'node_modules/**/*'

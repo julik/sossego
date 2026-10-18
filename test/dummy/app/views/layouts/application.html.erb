@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Sossego demos</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+    <%= stylesheet_link_tag "sossego/highlight", "demo" %>
+    <%= javascript_importmap_tags %>
+  </head>
+  <body>
+    <header>
+      <%= link_to "Sossego", root_path, class: "brand" %>
+      <nav>
+        <%= link_to "Progress", progress_path %>
+        <%= link_to "Chat (plain JS)", chat_path %>
+        <%= link_to "Turbo Streams", board_path %>
+      </nav>
+    </header>
+    <main><%= yield %></main>
+  </body>
+</html>

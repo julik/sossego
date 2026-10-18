@@ -1,0 +1,14 @@
+# SQLite by default. Point DATABASE_URL at PostgreSQL to run against it, e.g.
+#   DATABASE_URL=postgres://localhost/sossego_test bin/rails test
+default: &default
+  adapter: sqlite3
+  pool: 40
+  timeout: 5000
+
+development:
+  <<: *default
+  database: storage/development.sqlite3
+
+test:
+  <<: *default
+  database: storage/test.sqlite3

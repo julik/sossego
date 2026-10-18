@@ -1,0 +1,9 @@
+class AddFmtToSossegoEvents < ActiveRecord::Migration<%= migration_version %>
+  def change
+    # What `payload` holds, named as on the wire: "ejson" (JSON text), "text"
+    # (the text itself), "bytes" (base64), or a "gz:" variant of those
+    # (base64 of the gzipped content). Rows from before this column hold JSON
+    # and read as "ejson".
+    add_column :sossego_events, :fmt, :string, null: false, default: "ejson"
+  end
+end

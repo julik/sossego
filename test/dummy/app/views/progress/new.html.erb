@@ -1,0 +1,40 @@
+<h1>A task with progress</h1>
+<p>
+  The page made the stream <code><%= @stream.id %></code> and listens on it already.
+  "Analyze" sends the stream URL to the server, which starts a job reporting to it.
+</p>
+
+<div data-controller="sossego demo-task"
+     data-sossego-url-value="<%= sossego_signed_stream_path(@stream) %>"
+     data-demo-task-url-value="<%= analyze_progress_path %>"
+     data-action="sossego:complete->demo-task#done sossego:stalled->demo-task#done sossego:disconnected->demo-task#done">
+
+  <%= render "progress_bar" %>
+
+  <form class="expense" data-controller="sossego-highlight">
+    <label>Vendor <input name="expense[vendor]"></label>
+    <label>Amount <input name="expense[amount]" inputmode="decimal"></label>
+    <label>Currency
+      <select name="expense[currency]">
+        <option value=""></option>
+        <option>EUR</option><option>USD</option><option>BRL</option>
+      </select>
+    </label>
+    <label>Date <input type="date" name="expense[date]"></label>
+    <label class="check"><input type="checkbox" name="expense[paid]"> Paid</label>
+  </form>
+
+  <p class="buttons">
+    <button type="button" data-demo-task-target="button" data-action="demo-task#start">Analyze</button>
+    <button type="button" data-demo-task-target="button" data-action="demo-task#start" data-demo-task-fail-param="1">Analyze, and fail</button>
+  </p>
+</div>
+
+<hr>
+
+<h2>Start first, listen later</h2>
+<p>
+  This one starts the job and redirects to a page that waits for it. The job publishes before that page
+  connects, and the stream replays from its start. The job's last event sends the browser on.
+</p>
+<%= button_to "Prepare a report", prepare_progress_path, data: {turbo: false} %>
