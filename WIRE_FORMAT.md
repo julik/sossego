@@ -120,7 +120,7 @@ data: }
 
 - Emitted for every stored row with a non-reserved `event_name`, in `id` order, starting after the client's cursor.
 - `id:` is the cursor. The browser echoes it as `Last-Event-ID`; a client that reopens by hand sends it as `?last_event_id=`.
-- The client delivers these in wire order through one sequential queue, even when a `pld` decoder is asynchronous.
+- The client decodes these one at a time and hands them to the application in wire order, even when a `pld` decoder is asynchronous. It does not wait for the application's handler to finish before handing over the next one.
 
 ### 6.3 `ping`: liveness
 

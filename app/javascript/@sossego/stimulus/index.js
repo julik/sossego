@@ -26,7 +26,8 @@
  * Other DOM events, all bubbling from the controller element:
  *
  * - `sossego:complete` - a task settled (`progress_finished`,
- *   `progress_warning` or `error_message` was handled)
+ *   `progress_warning` or `error_message` arrived); fired at once, while the
+ *   progress element may still linger
  * - `sossego:stalled` - an awaited task went silent for `taskTimeout` ms
  * - `sossego:closed` - the stream ended for good; detail `{reason, seq}`,
  *   `seq` null when the server refused the stream
@@ -95,17 +96,32 @@ export function showProgress(controller, state, message) {
   if (!el) return null
   el.hidden = false
   el.removeAttribute("data-sossego-fading")
-  el.setAttribute("data-sossego-progress", state)
+  setState(el, state)
   const textEl = el.querySelector("[data-sossego-progress-text]")
   if (textEl && message !== null && message !== undefined) textEl.textContent = String(message)
   return el
 }
 
-async function fadeOut(el) {
+// Handlers are not waited for, so a linger that ends after a newer message
+// arrived must leave the element alone. Each state change bumps the
+// element's generation; a delayed fade only goes ahead if it hasn't moved.
+const generations = new WeakMap()
+
+function setState(el, state) {
+  generations.set(el, (generations.get(el) ?? 0) + 1)
+  el.setAttribute("data-sossego-progress", state)
+  return generations.get(el)
+}
+
+// Shows the element for `ms`, then fades and hides it, unless its state
+// changes in the meantime.
+async function lingerThenFade(el, generation, ms) {
+  await sleep(ms)
+  if (generations.get(el) !== generation) return
   el.setAttribute("data-sossego-fading", "")
   await sleep(FADE_MS)
-  el.hidden = true
   el.removeAttribute("data-sossego-fading")
+  if (generations.get(el) === generation) el.hidden = true
 }
 
 function complete(controller) {
@@ -141,8 +157,9 @@ function setFieldValue(input, value) {
 
 /**
  * Handlers by event name. Each gets the decoded payload and
- * `{controller, event}`; it may return a Promise, and the next event waits
- * for it.
+ * `{controller, event}`. Handlers are called in wire order, but a handler
+ * that returns a promise is not waited for: the next event is handled while
+ * it runs. A rejection is logged.
  *
  * @type {Record<string, (payload: any, context: {controller: SossegoController, event: import("@sossego/client").SossegoEvent}) => void | Promise<void>>}
  */
@@ -152,14 +169,12 @@ export const handlers = {
     showProgress(controller, "working", message)
   },
 
-  // Payload: the message. Held for a while, then the bar fades.
-  async progress_warning(message, { controller }) {
+  // Payload: the message. Held for a while, then the bar fades, unless
+  // something newer is shown by then.
+  progress_warning(message, { controller }) {
     const el = showProgress(controller, "warning", message)
-    if (el) {
-      await sleep(WARNING_LINGER_MS)
-      await fadeOut(el)
-    }
     complete(controller)
+    if (el) return lingerThenFade(el, generations.get(el), WARNING_LINGER_MS)
   },
 
   // Payload: the message. A reported error is the end of the task: the bar
@@ -170,16 +185,15 @@ export const handlers = {
   },
 
   // No payload. A bar showing an error or warning stays; otherwise the
-  // last message lingers, then the bar fades.
-  async progress_finished(_payload, { controller }) {
+  // last message lingers, then the bar fades, unless something newer is
+  // shown by then.
+  progress_finished(_payload, { controller }) {
+    complete(controller)
     const el = progressElement(controller)
     const state = el?.getAttribute("data-sossego-progress")
     if (el && !el.hidden && state !== "error" && state !== "warning") {
-      el.setAttribute("data-sossego-progress", "finished")
-      await sleep(FINISHED_LINGER_MS)
-      await fadeOut(el)
+      return lingerThenFade(el, setState(el, "finished"), FINISHED_LINGER_MS)
     }
-    complete(controller)
   },
 
   // Payload: `{"model[field]": value, ...}`. Sets the named fields in
@@ -304,9 +318,9 @@ export default class SossegoController extends Controller {
     return this.silenceTimer != null
   }
 
-  // Runs in wire order: the stream waits for the returned promise before
-  // handing over the next event.
-  async handle(event) {
+  // Called in wire order. The handler's promise, if it returns one, goes back
+  // to the stream, which doesn't wait for it but reports a rejection.
+  handle(event) {
     this.frameArrived()
     if (this.awaitingTask) {
       if (TERMINAL_EVENTS.includes(event.eventName)) this.stopAwaitingTask()
@@ -316,8 +330,7 @@ export default class SossegoController extends Controller {
     const { eventName, payload, seq, sseq } = event
     this.dispatch("event", { prefix: "sossego", detail: { eventName, payload, seq, sseq } })
 
-    const handler = handlers[eventName]
-    if (handler) await handler(payload, { controller: this, event })
+    return handlers[eventName]?.(payload, { controller: this, event })
   }
 
   frameArrived() {

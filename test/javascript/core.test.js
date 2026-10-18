@@ -123,15 +123,16 @@ describe("createSossegoStream — framework-agnostic core", () => {
   it("delivers a close after the sossego frames queued before it, with its reason and seq", async () => {
     const order = []
     let release
-    const blocker = new Promise ((r) => {
+    const blocker = new Promise((r) => {
       release = r
     })
     const states = []
     createSossegoStream({
       url: "/x",
       onEvent: async (e) => {
-        if (e.seq === "1") await blocker
         order.push(`event ${e.seq}`)
+        if (e.seq === "1") await blocker
+        order.push(`done ${e.seq}`)
       },
       onClose: (reason, seq) => void order.push(`close ${reason} ${seq}`),
       onStateChange: (s) => states.push(s),
@@ -143,15 +144,15 @@ describe("createSossegoStream — framework-agnostic core", () => {
     emitSossego(src, { seq: "2" })
     emitStoredClose(src, "3", "finished")
     await flushMicrotasks()
-    expect(order).toEqual([])
-    expect(src.isClosed()).toBe(false)
+
+    // Every handler is called, in order, before the close; the slow one is not waited for.
+    expect(order).toEqual(["event 1", "event 2", "done 2", "close finished 3"])
+    expect(src.isClosed()).toBe(true)
+    expect(states.at(-1)).toEqual({ status: "closed", lastEventId: "3" })
 
     release()
     await flushMicrotasks()
-
-    expect(order).toEqual(["event 1", "event 2", "close finished 3"])
-    expect(src.isClosed()).toBe(true)
-    expect(states.at(-1)).toEqual({ status: "closed", lastEventId: "3" })
+    expect(order.at(-1)).toEqual("done 1")
   })
 
   it("does not reconnect after a close, and cancels a reopen that was pending", async () => {
@@ -256,10 +257,10 @@ describe("createSossegoStream — sequential decode pipeline", () => {
     expect(seen).toEqual(["1", "2", "3"])
   })
 
-  it("waits for an async handler to resolve before the next event runs", async () => {
+  it("calls the next handler without waiting for an async one", async () => {
     const order = []
     let resolveFirst
-    const blocker = new Promise ((r) => {
+    const blocker = new Promise((r) => {
       resolveFirst = r
     })
 
@@ -278,12 +279,33 @@ describe("createSossegoStream — sequential decode pipeline", () => {
     emitSossego(src, { seq: "2" })
 
     await flushMicrotasks()
-    expect(order).toEqual(["start 1"])
+    expect(order).toEqual(["start 1", "start 2", "end 2"])
 
     resolveFirst()
     await flushMicrotasks()
+    expect(order).toEqual(["start 1", "start 2", "end 2", "end 1"])
+  })
 
-    expect(order).toEqual(["start 1", "end 1", "start 2", "end 2"])
+  it("reports an async handler's rejection to onError, and keeps going", async () => {
+    const onError = vi.fn()
+    const seen = []
+    createSossegoStream({
+      url: "/x",
+      onEvent: async (e) => {
+        if (e.seq === "1") throw new Error("handler failed later")
+        seen.push(e.seq)
+      },
+      onError,
+    })
+
+    const src = FakeEventSource.lastInstance()
+    src.simulateOpen()
+    emitSossego(src, { seq: "1" })
+    emitSossego(src, { seq: "2" })
+    await flushMicrotasks()
+
+    expect(seen).toEqual(["2"])
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: "handler failed later" }))
   })
 
   it("a handler error doesn't break the queue", async () => {

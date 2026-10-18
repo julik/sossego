@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { Application } from "@hotwired/stimulus"
 
-import SossegoController, { registerHandler, handlers, FINISHED_LINGER_MS, FADE_MS } from "@sossego/stimulus"
+import SossegoController, { registerHandler, handlers, FINISHED_LINGER_MS, WARNING_LINGER_MS, FADE_MS } from "@sossego/stimulus"
 import { closeData, eventData, FakeEventSource, installFakeEventSource } from "@sossego/testing"
 
 async function flush() {
@@ -112,22 +112,61 @@ describe("sossego Stimulus controller", () => {
     expect(window.Turbo.renderStreamMessage).toHaveBeenCalledWith("<turbo-stream action='remove' target='x'></turbo-stream>")
   })
 
-  it("handles events strictly in order, waiting for async handlers", async () => {
+  it("calls handlers in order without waiting for async ones", async () => {
     vi.useFakeTimers()
     const order = []
     registerHandler("slow", async (payload) => {
+      order.push(`start ${payload}`)
       await new Promise((resolve) => setTimeout(resolve, 100))
-      order.push(payload)
+      order.push(`end ${payload}`)
     })
-    registerHandler("fast", (payload) => order.push(payload))
+    registerHandler("fast", (payload) => order.push(`fast ${payload}`))
 
     emit("slow", 1)
     emit("fast", 2)
-    await vi.advanceTimersByTimeAsync(200)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(order).toEqual(["start 1", "fast 2"])
 
-    expect(order).toEqual([1, 2])
+    await vi.advanceTimersByTimeAsync(200)
+    expect(order).toEqual(["start 1", "fast 2", "end 1"])
     delete handlers.slow
     delete handlers.fast
+  })
+
+  it("completes a finished task at once, and a new task during the linger keeps its bar", async () => {
+    vi.useFakeTimers()
+    const completed = vi.fn()
+    client().addEventListener("sossego:complete", completed)
+
+    emit("progress", "First task")
+    emit("progress_finished", null)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(completed).toHaveBeenCalledTimes(1)
+    expect(progress().getAttribute("data-sossego-progress")).toBe("finished")
+
+    emit("progress", "Second task")
+    await vi.advanceTimersByTimeAsync(FINISHED_LINGER_MS + FADE_MS + 100)
+
+    expect(progress().hidden).toBe(false)
+    expect(progress().getAttribute("data-sossego-progress")).toBe("working")
+    expect(progress().textContent).toBe("Second task")
+  })
+
+  it("a warning fades after its time unless something newer shows", async () => {
+    vi.useFakeTimers()
+    emit("progress_warning", "Hard to read")
+    await vi.advanceTimersByTimeAsync(0)
+    expect(progress().getAttribute("data-sossego-progress")).toBe("warning")
+
+    await vi.advanceTimersByTimeAsync(WARNING_LINGER_MS + FADE_MS)
+    expect(progress().hidden).toBe(true)
+
+    emit("progress_warning", "Again")
+    await vi.advanceTimersByTimeAsync(1000)
+    emit("error_message", "Failed")
+    await vi.advanceTimersByTimeAsync(WARNING_LINGER_MS + FADE_MS)
+    expect(progress().hidden).toBe(false)
+    expect(progress().getAttribute("data-sossego-progress")).toBe("error")
   })
 
   it("gives up on an awaited task that goes silent", async () => {

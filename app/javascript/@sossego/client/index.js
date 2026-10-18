@@ -274,7 +274,9 @@ export function createDispatcher() {
  * @property {string} url
  * @property {string | null} [lastEventId] cursor for the first connect, sent
  *   as `last_event_id`. Without it the server decides where to start.
- * @property {(event: SossegoEvent) => void | Promise<void>} onEvent
+ * @property {(event: SossegoEvent) => void | Promise<void>} onEvent called
+ *   for each event, in wire order. A returned promise is not waited for; if it
+ *   rejects, the error goes to `onError`.
  * @property {(event: SossegoEvent, expectedSseq: number) => void} [onGap]
  *   called before an event whose `sseq` is not the previous one plus one:
  *   events were pruned or skipped, or the stream was reset. The first event
@@ -316,9 +318,12 @@ const ES_CLOSED = 2
  * stall detection.
  *
  * Exactly three SSE names are listened to: `sossego`, `ping` and `close`.
- * `sossego` and `close` frames go through a sequential queue, so they are
- * released in wire order even when a payload decoder is async; a `close` is
- * handled after every event received before it. Pings reset the stall timer
+ * `sossego` and `close` frames go through a sequential queue that decodes
+ * them one at a time and calls `onEvent` in wire order, even when a payload
+ * decoder is async (gzip); a `close` is handled after every event received
+ * before it. `onEvent` is called, not waited for: a handler that returns a
+ * promise runs on alongside the next events. To serialize your own async
+ * work, put it on a queue of your own (`createQueue(1)`). Pings reset the stall timer
  * on arrival and bypass the queue. A connection error keeps that order too,
  * so the end of a response that a `close` frame ended is never reported.
  *
@@ -384,7 +389,9 @@ export function createSossegoStream(opts) {
     failedConnections = 0
   }
 
-  // Decodes in the queue, so frames are handled in wire order.
+  // Decodes in the queue, one frame at a time, so frames are handed over in
+  // wire order and no two payloads are inflated at once. The handler is
+  // called from the queue but not waited for.
   const enqueueFrame = (handle, raw) => {
     queue
       .push(async () => {
@@ -419,7 +426,11 @@ export function createSossegoStream(opts) {
       try {
         if (lastSseq !== null && sseq !== lastSseq + 1) opts.onGap?.(event, lastSseq + 1)
         lastSseq = sseq
-        await opts.onEvent(event)
+        // Called in wire order, but not waited for: what the handler does
+        // after it returns is its own business. Its rejection still lands
+        // in onError.
+        const result = opts.onEvent(event)
+        if (typeof result?.then === "function") result.then(undefined, handleErr)
       } catch (err) {
         handleErr(err)
       }

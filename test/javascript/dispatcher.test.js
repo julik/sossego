@@ -49,7 +49,7 @@ describe("createDispatcher", () => {
     expect(handler).not.toHaveBeenCalled()
   })
 
-  it("returns an async handler's promise, so the stream waits for it", async () => {
+  it("returns an async handler's promise", async () => {
     const { on, dispatch } = createDispatcher()
     let completed = false
     on("x", async () => {
