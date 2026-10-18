@@ -233,6 +233,24 @@ A run always ends with `progress_finished`. On a failure, `error_message` comes 
 
 A publish that fails is logged and never raises, so it can't hide the job's own outcome.
 
+To give all your watched jobs the same policy (queue, retries, failure message), wrap it in a concern of your own. Include `Sossego::Reporting` in the module body, not inside `included do`. That makes it a dependency of your concern, so it sits below your concern in the job's ancestors and your overrides win. Included from `included do`, it lands above your concern and silently replaces them:
+
+```ruby
+module WatchedJob
+  extend ActiveSupport::Concern
+  include Sossego::Reporting          # here, not in `included do`
+
+  included do
+    queue_as :interactive
+    sossego_retry_on Net::ReadTimeout, Faraday::TimeoutError, attempts: 3
+  end
+
+  private
+
+  def sossego_failure_message(error) = "Something went wrong, please try again."
+end
+```
+
 `Sossego::Enqueuing` guards the moment a controller hands the job off:
 
 ```ruby
