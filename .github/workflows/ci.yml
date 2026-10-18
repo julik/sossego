@@ -20,6 +20,7 @@ jobs:
     name: "Ruby (${{ matrix.database }})"
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         database: [sqlite, postgres]
     services:
@@ -31,14 +32,15 @@ jobs:
           POSTGRES_DB: sossego_test
         ports: ["5432:5432"]
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
-    env:
-      DATABASE_URL: ${{ matrix.database == 'postgres' && 'postgres://postgres:postgres@localhost:5432/sossego_test' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.4"
           bundler-cache: true
+      # An empty DATABASE_URL makes Rails abort, so only set it for the postgres leg
+      - if: matrix.database == 'postgres'
+        run: echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/sossego_test" >> "$GITHUB_ENV"
       - run: cd test/dummy && RAILS_ENV=test bin/rails db:schema:load
       - run: bundle exec rake test
 
