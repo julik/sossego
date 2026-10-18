@@ -4,6 +4,30 @@
 
 Server-Sent Events for Rails, from a database table. You publish an event and it becomes a row. Each open stream polls for new rows and sends them to the browser, which resumes where it left off after a reconnect. No Redis, no WebSocket server, no `ActionController::Live`. Works on SQLite and PostgreSQL.
 
+Replaces ActionCable, because SSEs are just a better fit for most apps.
+
+## Why Sossego
+
+You should not need socket upgrades, separate authentication and a persisted channel - using an HTTP connection is just simpler. But that's not all. Here is all the stuff you get for free with SSE+Sossego:
+
+* No separate socket handling and no "suckerpunch" server threads
+* Unlimited number of streams you can open - limited only by the number of connections your server can support
+* Automatic replay from offset (the browser does this, by itself, with zero extra code)
+* Visible and debuggable events in your dev console
+* A clear, _push only_ development model
+* They multiplex onto the HTTP/2 connection your browser already has
+* On servers like Falcon it will handle a ridiculous number of connections
+* It just polls. No socket leakages, no connection exhaustion.
+* Works through proxies
+* Uses the same auth you already have (plus signed URLs)
+
+
+If you need more convincing (though [I don't have to convince you of anything](https://blog.julik.nl/2024/02/change-my-mind)), you can always read these articles that put it way better than I ever could:
+
+* [WebSockets, caution required!](https://samsaffron.com/archive/2015/12/29/websockets-caution-required) by Sam Saffron
+* [Server-Sent Events: the alternative to WebSockets you should be using](https://germano.dev/sse-websockets/)
+* [Server-sent events are cool](https://jvns.ca/blog/2021/01/12/day-36--server-sent-events-are-cool--and-a-fun-bug/)
+
 ## Install
 
 ```ruby
