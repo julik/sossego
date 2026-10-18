@@ -151,7 +151,10 @@ Moneymaker's binary support (A4) and its compression (B1) are back under this sc
 
 ## D. Jobs and controllers (Moneymaker only)
 
-### D1. `SossegoReporting` → `Sossego::Reporting`
+### D1. `SossegoReporting` → `Sossego::Reporting` → `Sossego::PublishingHelpers`
+
+**Renamed 18 Oct 2026:** the job concern is now `Sossego::PublishingHelpers`. The `publish_*` helpers (progress, warning, error, field prefill, visit, finished, Turbo Stream) moved onto `Sossego::Stream`, so jobs, controllers and callbacks all publish through a stream: `stream.publish_progress(...)`. The concern gives the job its `stream` and keeps the lifecycle: terminal events, `sossego_retry_on`, closing, and the `publish_failure` hook. Its own publishes never raise; the job's explicit ones do. The rest of this section describes the concern under its old name.
+
 **Kept:**
 - every run ends with a terminal event (`progress_finished` on success; `error_message` + `progress_finished` on any `StandardError` or `ScriptError`);
 - the stream is read back off the job's keyword arguments;

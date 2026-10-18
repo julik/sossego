@@ -3,7 +3,9 @@
 module Sossego
   # For an ActiveJob that drives a progress display in the browser over a
   # Sossego stream. The job takes the stream id as a keyword argument
-  # (`stream_id:` unless {.sossego_stream_argument} says otherwise).
+  # (`stream_id:` unless {.sossego_stream_argument} says otherwise), and
+  # publishes through {#stream} with the stream's helpers:
+  # {Stream#publish_progress}, {Stream#publish_field_prefill} and the rest.
   #
   # Two things go wrong with a spinner driven by a background job, and to
   # the user they look identical - nothing happens, forever:
@@ -20,10 +22,11 @@ module Sossego
   # - On an error named with {.sossego_retry_on} that will be retried:
   #   `progress` saying it retries.
   # - On any other error, or the last attempt: `error_message` then
-  #   `progress_finished`, and the error is raised on.
+  #   `progress_finished` ({#publish_failure}), and the error is raised on.
   #
-  # Publishing never raises: a failed publish is logged, so it never masks
-  # what the job was trying to report.
+  # The events this concern publishes itself never raise: a failed one is
+  # logged, so it never masks what the job was trying to report. The job's
+  # own `stream.publish_*` calls raise like any other call.
   #
   # ## Closing the stream
   #
@@ -39,18 +42,18 @@ module Sossego
   #
   # @example
   #   class ReceiptOcrJob < ApplicationJob
-  #     include Sossego::Reporting
+  #     include Sossego::PublishingHelpers
   #     queue_as :interactive
   #     sossego_retry_on Net::ReadTimeout, Errno::ECONNRESET, attempts: 3
   #
   #     def perform(receipt_id:, stream_id:)
-  #       publish_progress("Reading the receipt...")
-  #       publish_field_prefill("expense[amount]" => "12.50")
+  #       stream.publish_progress("Reading the receipt...")
+  #       stream.publish_field_prefill("expense[amount]" => "12.50")
   #     end
   #   end
   #
   #   ReceiptOcrJob.perform_later(receipt_id: 1, stream_id: stream.id)
-  module Reporting
+  module PublishingHelpers
     extend ActiveSupport::Concern
 
     included do
@@ -61,14 +64,14 @@ module Sossego
 
       around_perform do |job, block|
         block.call
-        job.publish_finished
+        job.send(:quietly, "progress_finished") { job.stream&.publish_finished }
         job.close_sossego_stream("finished")
       rescue StandardError, ScriptError => e
         # ScriptError too (NotImplementedError and friends): it is not a
         # StandardError, so without it here such a failure sails past and
         # the spinner never stops.
         if job.sossego_will_retry?(e)
-          job.publish_progress("#{e.class.name.demodulize} - retrying...")
+          job.send(:quietly, "progress") { job.stream&.publish_progress("#{e.class.name.demodulize} - retrying...") }
         else
           job.publish_failure(e)
           job.close_sossego_stream("failed")
@@ -93,63 +96,28 @@ module Sossego
       end
     end
 
+    # The stream this job reports to, read back off the job's arguments, so
+    # it is there even when perform blew up before doing anything else. Nil
+    # when the job was given none.
+    #
+    # @return [Sossego::Stream, nil]
+    def stream
+      id = arguments.grep(Hash).first&.[](sossego_stream_argument)
+      Sossego::Stream.new(id) if id.present?
+    end
+
     # @return [Boolean]
     def sossego_will_retry?(error)
       sossego_retried_errors.any? { |klass| error.is_a?(klass) } && executions < sossego_max_attempts
     end
 
-    # The stream this job reports to, read back off the job's arguments, so
-    # it is there even when perform blew up before doing anything else.
-    #
-    # @return [Sossego::Stream, nil]
-    def sossego_stream
-      id = arguments.grep(Hash).first&.[](sossego_stream_argument)
-      Sossego::Stream.new(id) if id.present?
-    end
-
-    def publish_progress(message)
-      publish_sossego_event("progress", message)
-    end
-
-    def publish_warning(message)
-      publish_sossego_event("progress_warning", message)
-    end
-
-    def publish_error(message)
-      publish_sossego_event("error_message", message)
-    end
-
-    # @param fields [Hash{String => Object}] input names to values
-    def publish_field_prefill(fields)
-      publish_sossego_event("field_prefill", fields)
-    end
-
-    def publish_finished
-      publish_sossego_event("progress_finished")
-    end
-
-    # Sends the browser somewhere else - the terminal event for a job whose
-    # result is a page rather than a set of form fields.
-    def publish_visit(url)
-      publish_sossego_event("visit", url)
-    end
-
-    # Takes what {Stream#publish_turbo_stream} takes: an action and its
-    # options, or `<turbo-stream>` elements as strings. A template that fails
-    # to render raises, like any other error in the job, so the user is told.
-    #
-    # @example
-    #   publish_turbo_stream(:replace, target: txn, partial: "transactions/category", locals: {txn:})
-    def publish_turbo_stream(*args, **options)
-      publish_sossego_event("turbo_stream", TurboStream.html_for(*args, **options))
-    end
-
     # Says what went wrong and stops the spinner. Always both events - an
     # error the user cannot see is the same to them as no error at all.
+    # Override to add to it, calling `super`. Never raises.
     def publish_failure(error)
       logger&.error("[#{self.class.name}] #{error.class.name}: #{error.message}")
-      publish_error(sossego_failure_message(error))
-      publish_finished
+      quietly("error_message") { stream&.publish_error(sossego_failure_message(error)) }
+      quietly("progress_finished") { stream&.publish_finished }
     end
 
     # Ends the stream for good when {.sossego_close_stream} is set. Never
@@ -157,10 +125,7 @@ module Sossego
     #
     # @param reason [String]
     def close_sossego_stream(reason)
-      sossego_stream&.publish_close(reason: reason) if sossego_close_stream
-    rescue => e
-      logger&.error("[#{self.class.name}] could not close the stream: #{e.class}: #{e.message}")
-      nil
+      quietly("close") { stream&.publish_close(reason: reason) } if sossego_close_stream
     end
 
     # What the user reads when the job fails. Override to say less.
@@ -172,8 +137,8 @@ module Sossego
 
     private
 
-    def publish_sossego_event(event_name, payload = nil)
-      sossego_stream&.publish(event_name, payload)
+    def quietly(event_name)
+      yield
     rescue => e
       logger&.error("[#{self.class.name}] could not publish #{event_name}: #{e.class}: #{e.message}")
       nil

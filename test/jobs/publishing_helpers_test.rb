@@ -2,20 +2,20 @@
 
 require "test_helper"
 
-class Sossego::ReportingTest < ActiveJob::TestCase
+class Sossego::PublishingHelpersTest < ActiveJob::TestCase
   class Transient < StandardError; end
 
   class WorkingJob < ActiveJob::Base
-    include Sossego::Reporting
+    include Sossego::PublishingHelpers
 
     def perform(stream_id:)
-      publish_progress("Working...")
-      publish_field_prefill("expense[amount]" => "12.50")
+      stream.publish_progress("Working...")
+      stream.publish_field_prefill("expense[amount]" => "12.50")
     end
   end
 
   class FailingJob < ActiveJob::Base
-    include Sossego::Reporting
+    include Sossego::PublishingHelpers
 
     def perform(stream_id:, error: "ArgumentError")
       raise error.constantize, "nope"
@@ -23,7 +23,7 @@ class Sossego::ReportingTest < ActiveJob::TestCase
   end
 
   class FlakyJob < ActiveJob::Base
-    include Sossego::Reporting
+    include Sossego::PublishingHelpers
 
     sossego_retry_on Transient, attempts: 3, wait: 0
 
@@ -33,26 +33,26 @@ class Sossego::ReportingTest < ActiveJob::TestCase
   end
 
   class OtherArgumentJob < ActiveJob::Base
-    include Sossego::Reporting
+    include Sossego::PublishingHelpers
 
     self.sossego_stream_argument = :progress_stream
 
     def perform(progress_stream:)
-      publish_progress("Here")
+      stream.publish_progress("Here")
     end
   end
 
   class OneOffJob < ActiveJob::Base
-    include Sossego::Reporting
+    include Sossego::PublishingHelpers
 
     self.sossego_close_stream = true
     sossego_retry_on Transient, attempts: 2, wait: 0
 
     def perform(stream_id:, outcome: :ok)
-      publish_progress("Working...")
+      stream.publish_progress("Working...")
       raise ArgumentError, "nope" if outcome == :fail
       raise Transient, "blip" if outcome == :flaky
-      publish_visit("/done")
+      stream.publish_visit("/done")
     end
   end
 
@@ -106,14 +106,31 @@ class Sossego::ReportingTest < ActiveJob::TestCase
     assert_equal ["progress", "progress_finished"], published.map(&:first)
   end
 
-  test "a publish that fails does not mask the job's own outcome" do
+  test "the events the concern publishes itself never mask the job's own error" do
     Sossego::Event.stub(:publish, ->(**) { raise "database is gone" }) do
-      assert_nothing_raised { WorkingJob.perform_now(stream_id: @stream.id) }
+      error = assert_raises(ArgumentError) { FailingJob.perform_now(stream_id: @stream.id) }
+      assert_equal "nope", error.message
     end
   end
 
-  test "does nothing without a stream" do
-    assert_nothing_raised { WorkingJob.perform_now(stream_id: nil) }
+  test "the job's own publishes raise like any other call" do
+    Sossego::Event.stub(:publish, ->(**) { raise "database is gone" }) do
+      error = assert_raises(RuntimeError) { WorkingJob.perform_now(stream_id: @stream.id) }
+      assert_equal "database is gone", error.message
+    end
+  end
+
+  class OptionalStreamJob < ActiveJob::Base
+    include Sossego::PublishingHelpers
+
+    def perform(stream_id: nil)
+      stream&.publish_progress("Only when someone watches")
+    end
+  end
+
+  test "stream is nil without a stream id, and the concern publishes nothing" do
+    assert_nothing_raised { OptionalStreamJob.perform_now }
+    assert_raises(ArgumentError) { FailingJob.perform_now(stream_id: nil) }
     assert_equal 0, Sossego::Event.count
   end
 
@@ -153,20 +170,20 @@ class Sossego::ReportingTest < ActiveJob::TestCase
   end
 
   class TurboJob < ActiveJob::Base
-    include Sossego::Reporting
+    include Sossego::PublishingHelpers
 
     def perform(stream_id:, counter_id:)
       counter = Counter.find(counter_id)
-      publish_turbo_stream(:replace, target: counter, partial: "board/counter", locals: {counter: counter})
-      publish_turbo_stream(:remove, target: "spinner")
+      stream.publish_turbo_stream(:replace, target: counter, partial: "board/counter", locals: {counter: counter})
+      stream.publish_turbo_stream(:remove, target: "spinner")
     end
   end
 
   class BrokenTurboJob < ActiveJob::Base
-    include Sossego::Reporting
+    include Sossego::PublishingHelpers
 
     def perform(stream_id:)
-      publish_turbo_stream(:append, target: "x", partial: "board/no_such_partial")
+      stream.publish_turbo_stream(:append, target: "x", partial: "board/no_such_partial")
     end
   end
 

@@ -202,43 +202,44 @@ A UUID primary key works if ids are generated in commit order (PostgreSQL 18's `
 
 ## Background jobs
 
-`Sossego::Reporting` is for a job that a page watches. The job takes the stream id as `stream_id:`; set `sossego_stream_argument` to use another name.
+Every `Sossego::Stream` has helpers for the events the Stimulus controller handles. Jobs, controllers and callbacks all publish through a stream:
+
+| Helper | Event | Payload |
+|---|---|---|
+| `stream.publish_progress(text)` | `progress` | text |
+| `stream.publish_warning(text)` | `progress_warning` | text |
+| `stream.publish_error(text)` | `error_message` | text |
+| `stream.publish_field_prefill(hash)` | `field_prefill` | `{"model[field]" => value}` |
+| `stream.publish_turbo_stream(action, **options)` or `(html, …)` | `turbo_stream` | `<turbo-stream>` HTML, see [Turbo Streams](#turbo-streams) |
+| `stream.publish_visit(url)` | `visit` | URL |
+| `stream.publish_finished` | `progress_finished` | none |
+
+`Sossego::PublishingHelpers` is for a job that a page watches. It gives the job its `stream`, read from the `stream_id:` argument (set `sossego_stream_argument` to use another name), and makes sure the page hears how the job ended:
 
 ```ruby
 class ReceiptOcrJob < ApplicationJob
-  include Sossego::Reporting
+  include Sossego::PublishingHelpers
   queue_as :interactive                              # give watched jobs a queue of their own
   sossego_retry_on Net::ReadTimeout, attempts: 3     # retry_on, and say so on the stream
   self.sossego_close_stream = true                   # end the stream when the job ends
 
   def perform(receipt_id:, stream_id:)
-    publish_progress("Reading the receipt...")
-    publish_field_prefill("expense[amount]" => "12.50")
+    stream.publish_progress("Reading the receipt...")
+    stream.publish_field_prefill("expense[amount]" => "12.50")
   end
 end
 ```
 
-A run always ends with `progress_finished`. On a failure, `error_message` comes first. A watched job that dies otherwise leaves a spinner turning forever.
+A run always ends with `progress_finished`. On a failure, `publish_failure(error)` publishes `error_message` first; the text is `sossego_failure_message(error)`, which you can override to say less. Override `publish_failure` to add to it, for example a `visit` to a page the user can carry on from, calling `super`. A watched job that dies otherwise leaves a spinner turning forever.
 
-| Helper | Event | Payload |
-|---|---|---|
-| `publish_progress(text)` | `progress` | text |
-| `publish_warning(text)` | `progress_warning` | text |
-| `publish_error(text)` | `error_message` | text |
-| `publish_field_prefill(hash)` | `field_prefill` | `{"model[field]" => value}` |
-| `publish_turbo_stream(action, **options)` or `(html, …)` | `turbo_stream` | `<turbo-stream>` HTML, see [Turbo Streams](#turbo-streams) |
-| `publish_visit(url)` | `visit` | URL |
-| `publish_finished` | `progress_finished` | none |
-| `publish_failure(error)` | `error_message` + `progress_finished` | `sossego_failure_message(error)`; override it to say less |
+The events the concern publishes itself (finished, failure, retrying, close) never raise: a failure is logged, so it can't hide the job's own error. The job's own `stream.publish_*` calls raise like any other call. `stream` is nil when the job was given no stream id, so a job that reports only sometimes writes `stream&.publish_progress(...)`.
 
-A publish that fails is logged and never raises, so it can't hide the job's own outcome.
-
-To give all your watched jobs the same policy (queue, retries, failure message), wrap it in a concern of your own. Include `Sossego::Reporting` in the module body, not inside `included do`. That makes it a dependency of your concern, so it sits below your concern in the job's ancestors and your overrides win. Included from `included do`, it lands above your concern and silently replaces them:
+To give all your watched jobs the same policy (queue, retries, failure message), wrap it in a concern of your own. Include `Sossego::PublishingHelpers` in the module body, not inside `included do`. That makes it a dependency of your concern, so it sits below your concern in the job's ancestors and your overrides win. Included from `included do`, it lands above your concern and silently replaces them:
 
 ```ruby
 module WatchedJob
   extend ActiveSupport::Concern
-  include Sossego::Reporting          # here, not in `included do`
+  include Sossego::PublishingHelpers   # here, not in `included do`
 
   included do
     queue_as :interactive

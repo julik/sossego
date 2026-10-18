@@ -187,4 +187,23 @@ class Sossego::StreamTest < ActiveSupport::TestCase
 
     assert_equal %w[a b], Sossego::Event.for_stream(stream.id).order(:id).pluck(:event_name)
   end
+
+  test "the progress helpers publish the events the Stimulus controller handles" do
+    stream = Sossego::Stream.new("test:1:helpers")
+    stream.publish_progress("Reading...")
+    stream.publish_warning("Hard to read")
+    stream.publish_error("Failed")
+    stream.publish_field_prefill("expense[amount]" => "12.50")
+    stream.publish_visit("/done")
+    stream.publish_finished
+
+    assert_equal [
+      ["progress", "Reading..."],
+      ["progress_warning", "Hard to read"],
+      ["error_message", "Failed"],
+      ["field_prefill", {"expense[amount]" => "12.50"}],
+      ["visit", "/done"],
+      ["progress_finished", nil]
+    ], Sossego::Event.for_stream(stream.id).order(:id).map { |e| [e.event_name, e.value] }
+  end
 end

@@ -126,6 +126,54 @@ module Sossego
       Event.publish(stream_id: @id, event_name: event_name, payload: payload, after: after, fmt: fmt)
     end
 
+    # Shows a message in the progress display (`@sossego/stimulus`).
+    #
+    # @param message [String]
+    # @return [Sossego::Event]
+    def publish_progress(message)
+      publish("progress", message)
+    end
+
+    # Shows a warning for a while, then lets the progress display fade.
+    #
+    # @param message [String]
+    # @return [Sossego::Event]
+    def publish_warning(message)
+      publish("progress_warning", message)
+    end
+
+    # Shows an error and keeps it up. Event `error_message`: `error` is reserved.
+    #
+    # @param message [String]
+    # @return [Sossego::Event]
+    def publish_error(message)
+      publish("error_message", message)
+    end
+
+    # Fills form fields in, one after another, in document order.
+    #
+    # @param fields [Hash{String => Object}] input names to values, e.g.
+    #   `{"expense[amount]" => "12.50"}`
+    # @return [Sossego::Event]
+    def publish_field_prefill(fields)
+      publish("field_prefill", fields)
+    end
+
+    # Sends the browser to a URL (with Turbo when the page has it).
+    #
+    # @param url [String]
+    # @return [Sossego::Event]
+    def publish_visit(url)
+      publish("visit", url.to_s)
+    end
+
+    # The task is over: the progress display settles.
+    #
+    # @return [Sossego::Event]
+    def publish_finished
+      publish("progress_finished")
+    end
+
     # Publish a Turbo Stream: one action, built and rendered like turbo-rails'
     # `broadcast_action_to`, or `<turbo-stream>` elements you have as strings.
     # Every built-in action works, and custom ones. The event is

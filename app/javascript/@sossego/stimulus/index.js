@@ -1,6 +1,6 @@
 /**
  * Stimulus controller for a Sossego stream, with handlers for the events
- * that `Sossego::Reporting` jobs publish: a progress bar, form prefill,
+ * that `Sossego::PublishingHelpers` jobs (and the `Sossego::Stream#publish_*` helpers) publish: a progress bar, form prefill,
  * Turbo Streams and navigation.
  *
  * Register it under any name; the examples use "sossego":

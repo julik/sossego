@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Sossego
-  # For a controller that hands work to a {Reporting} job. Handing off is the
+  # For a controller that hands work to a {PublishingHelpers} job. Handing off is the
   # one moment a progress display can start with nobody on the other end: if
   # enqueueing raises, the browser has already been told the task started
   # and would wait forever.
@@ -31,14 +31,14 @@ module Sossego
     # @param ack [String, nil] the first `progress` message; nil for none
     # @return [Boolean] true when the block ran without raising
     def sossego_enqueue(stream, ack: "Queued...")
-      stream.publish("progress", ack) if ack
+      stream.publish_progress(ack) if ack
       yield
       true
     rescue => e
       logger&.error("[#{self.class.name}] could not enqueue: #{e.class.name}: #{e.message}")
       begin
-        stream.publish("error_message", "Could not start the task (#{e.class.name.demodulize}). Please try again.")
-        stream.publish("progress_finished")
+        stream.publish_error("Could not start the task (#{e.class.name.demodulize}). Please try again.")
+        stream.publish_finished
       rescue => publish_error
         logger&.error("[#{self.class.name}] could not report the failed enqueue: #{publish_error.class}: #{publish_error.message}")
       end

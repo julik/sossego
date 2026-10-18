@@ -105,17 +105,17 @@ The job reports to it:
 
 ```ruby
 class ImportJob < ApplicationJob
-  include Sossego::Reporting
+  include Sossego::PublishingHelpers
 
   def perform(file_id:, stream_id:)
-    publish_progress("Reading the file...")
-    rows = Import.new(file_id).run { |n| publish_progress("Imported #{n} rows...") }
-    publish_turbo_stream(:replace, target: "summary", partial: "imports/summary", locals: {rows:})
+    stream.publish_progress("Reading the file...")
+    rows = Import.new(file_id).run { |n| stream.publish_progress("Imported #{n} rows...") }
+    stream.publish_turbo_stream(:replace, target: "summary", partial: "imports/summary", locals: {rows:})
   end
 end
 ```
 
-The progress element shows each message. When the job finishes, or fails with an error message, the bar settles. Its `data-sossego-progress` attribute is set to `working`, `warning`, `error` or `finished`; style it with attribute selectors. The job can also fill in a form (`publish_field_prefill`) or send the browser elsewhere (`publish_visit`).
+The progress element shows each message. When the job finishes, or fails with an error message, the bar settles. Its `data-sossego-progress` attribute is set to `working`, `warning`, `error` or `finished`; style it with attribute selectors. The job can also fill in a form (`stream.publish_field_prefill`) or send the browser elsewhere (`stream.publish_visit`). Those helpers are on every `Sossego::Stream`, so a controller or a console can publish the same events.
 
 ## One-off named streams
 
@@ -136,7 +136,7 @@ When the work is over, close the stream, so every page reading it stops listenin
 stream.publish_close(reason: "finished")
 
 class ImportJob < ApplicationJob
-  include Sossego::Reporting
+  include Sossego::PublishingHelpers
   self.sossego_close_stream = true   # closes the stream after the job's last event, success or failure
 end
 ```
