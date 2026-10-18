@@ -73,7 +73,8 @@ module Sossego
         if job.sossego_will_retry?(e)
           job.send(:quietly, "progress") { job.stream&.publish_progress("#{e.class.name.demodulize} - retrying...") }
         else
-          job.publish_failure(e)
+          # Guarded as a whole, so an override's own publishes can't mask the error either
+          job.send(:quietly, "the failure") { job.publish_failure(e) }
           job.close_sossego_stream("failed")
         end
         raise
@@ -113,7 +114,8 @@ module Sossego
 
     # Says what went wrong and stops the spinner. Always both events - an
     # error the user cannot see is the same to them as no error at all.
-    # Override to add to it, calling `super`. Never raises.
+    # Override to add to it, calling `super`. Nothing it publishes, an
+    # override's included, can replace the job's own error.
     def publish_failure(error)
       logger&.error("[#{self.class.name}] #{error.class.name}: #{error.message}")
       quietly("error_message") { stream&.publish_error(sossego_failure_message(error)) }

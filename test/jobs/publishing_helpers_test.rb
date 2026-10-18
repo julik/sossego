@@ -201,4 +201,24 @@ class Sossego::PublishingHelpersTest < ActiveJob::TestCase
 
     assert_equal ["error_message", "progress_finished"], published.map(&:first)
   end
+
+  class FailureOverrideJob < ActiveJob::Base
+    include Sossego::PublishingHelpers
+
+    def perform(stream_id:)
+      raise ArgumentError, "the real problem"
+    end
+
+    def publish_failure(error)
+      super
+      raise "the visit could not be published"
+    end
+  end
+
+  test "an override of publish_failure that raises does not replace the job's own error" do
+    error = assert_raises(ArgumentError) { FailureOverrideJob.perform_now(stream_id: @stream.id) }
+
+    assert_equal "the real problem", error.message
+    assert_equal ["error_message", "progress_finished"], published.map(&:first)
+  end
 end
