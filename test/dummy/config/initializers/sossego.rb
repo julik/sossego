@@ -12,25 +12,23 @@ Sossego.retention = 24.hours
 # Sossego.connects_to = {database: {writing: :sossego, reading: :sossego}}
 
 # Which connection streams poll on. A stream polls every quarter second for up
-# to half a minute. By default each poll borrows the connection Sossego::Event
-# uses (your app's, unless connects_to is set above) and gives it back, so
-# nothing is held between polls. To poll somewhere else, wrap the poll. Pick
-# one of these, or write your own; `poll.call` runs the queries.
+# to half a minute.
 #
-# A reading role, e.g. a replica, declared in config/database.yml and with
-# `connects_to` on your ApplicationRecord:
+# On SQLite there is nothing to set up: each poll opens the database file
+# read-only, with the main connection's settings, and closes it afterwards, so
+# a stream never holds a connection and can never take the write lock. In
+# transactional tests polls stay on the test's connection, which can see the
+# test's rows. To turn this off:
+#
+#   Sossego.readonly_sqlite_polling = false
+#
+# On other databases each poll borrows the connection Sossego::Event uses
+# (your app's, unless connects_to is set above) and gives it back. To poll
+# somewhere else, wrap the poll; `poll.call` runs the queries. A reading role,
+# e.g. a replica, declared in config/database.yml and with `connects_to` on your
+# ApplicationRecord:
 #
 #   Sossego.around_poll = ->(poll) { Sossego.connection_class.connected_to(role: :reading) { poll.call } }
-#
-# SQLite: the same database file opened read-only, in a pool of its own, so
-# polling can never take the write lock. Nothing to declare in database.yml.
-# Not in tests: a connection of its own can't see a test's transaction.
-#
-Sossego.poll_on_readonly_sqlite_connection! unless Rails.env.test?
-#
-# Anything else, e.g. a shard:
-#
-#   Sossego.around_poll = ->(poll) { ActiveRecord::Base.connected_to(shard: :events) { poll.call } }
 
 # What signs the stream ids handed to the browser (Sossego::Stream#signature).
 # Defaults to Rails.application.message_verifier("sossego_streams").

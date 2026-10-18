@@ -130,15 +130,20 @@ module Sossego
 
     # Wraps every poll a stream makes. Called with the poll, a callable that
     # runs the queries and returns their result; return what it returns.
-    # Unset, the poll runs on whatever connection `Sossego::Event` has. Use
-    # it to poll on another connection, so a stream - which stays open for
-    # half a minute - never holds a write-capable one. The initializer the
-    # install generator writes has recipes.
+    # Unset, a poll on SQLite goes through a read-only connection opened for
+    # it ({ReadonlyPolling}), and on other databases through whatever
+    # connection `Sossego::Event` has. Set it to poll somewhere else, e.g. a
+    # replica. The initializer the install generator writes has recipes.
     #
     # @example Poll on the app's reading role
     #   Sossego.around_poll = ->(poll) { Sossego.connection_class.connected_to(role: :reading) { poll.call } }
     # @return [#call, nil]
     attr_accessor :around_poll
+
+    # On SQLite, poll through a read-only connection opened for each poll and
+    # closed after it ({ReadonlyPolling}). True by default.
+    # @return [Boolean]
+    attr_accessor :readonly_sqlite_polling
 
     # Renders the templates of Turbo Streams ({TurboStream.render}): returns
     # something that responds to `render`, like a controller class. Defaults to
@@ -164,6 +169,7 @@ module Sossego
     end
   end
   self.retention = 24.hours
+  self.readonly_sqlite_polling = true
 
   # The class whose connection `Sossego::Event` uses, and so the one to call
   # `connected_to` on: `Sossego::ApplicationRecord` with {.connects_to} set,
@@ -172,36 +178,6 @@ module Sossego
   # @return [Class]
   def self.connection_class
     connects_to ? Sossego::ApplicationRecord : ActiveRecord::Base
-  end
-
-  # Polls on a read-only copy of the SQLite connection: the same database
-  # file, opened with SQLITE_OPEN_READONLY, in a pool of its own. Nothing the
-  # polling does can then take the write lock. The pool is set up at the
-  # first poll, so this can be called from an initializer.
-  #
-  # A connection of its own cannot see what a test's transaction wrote, so
-  # don't call this in the test environment.
-  #
-  # @param role [Symbol] the role the copy is registered under
-  # @return [void]
-  def self.poll_on_readonly_sqlite_connection!(role: :sossego_readonly)
-    lock = Mutex.new
-    established = false
-    self.around_poll = ->(poll) do
-      lock.synchronize do
-        next if established
-
-        writing = Sossego::Event.connection_db_config
-        unless writing.adapter.to_s.include?("sqlite")
-          raise ArgumentError, "a read-only copy of the connection is for SQLite; poll on a reading role instead (see Sossego.around_poll)"
-        end
-        readonly = ActiveRecord::DatabaseConfigurations::HashConfig.new(writing.env_name, "#{writing.name}_#{role}", writing.configuration_hash.merge(readonly: true))
-        ActiveRecord::Base.connection_handler.establish_connection(readonly, owner_name: connection_class, role: role)
-        established = true
-      end
-      connection_class.connected_to(role: role) { poll.call }
-    end
-    nil
   end
 
   # Encoders by `fmt`. Each takes the application's value and returns what
@@ -442,6 +418,7 @@ module Sossego
 end
 
 require_relative "sossego/stream"
+require_relative "sossego/readonly_polling"
 require_relative "sossego/source"
 require_relative "sossego/streaming_body"
 require_relative "sossego/turbo_stream"

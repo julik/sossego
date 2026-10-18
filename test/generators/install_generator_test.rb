@@ -29,7 +29,7 @@ class Sossego::InstallGeneratorTest < Rails::Generators::TestCase
     assert_file "config/routes.rb", /mount Sossego::Engine => "\/sossego"/
     assert_file "config/initializers/sossego.rb" do |initializer|
       assert_match(/^Sossego.retention = 24.hours$/, initializer)
-      assert_match(/^#   Sossego.poll_on_readonly_sqlite_connection! unless Rails.env.test\?$/, initializer)
+      assert_match(/^#   Sossego.readonly_sqlite_polling = false$/, initializer)
       assert_match(/^#   Sossego.around_poll = ->\(poll\) \{ Sossego.connection_class.connected_to\(role: :reading\) \{ poll.call \} \}$/, initializer)
     end
   end

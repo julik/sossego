@@ -21,6 +21,11 @@ You should not need socket upgrades, separate authentication and a persisted cha
 * Works through proxies
 * Uses the same auth you already have (plus signed URLs)
 
+There is a number of special perks with Sossego too:
+
+* It will use a readonly DB handle for push. With SQLite it will open it in `readonly` mode
+* It gives you building blocks for both Stimulus and React, out of the box
+* It gives you binary payloads (gzip+Base64)
 
 If you need more convincing (though [I don't have to convince you of anything](https://blog.julik.nl/2024/02/change-my-mind)), you can always read these articles that put it way better than I ever could:
 

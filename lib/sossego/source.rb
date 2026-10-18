@@ -27,7 +27,8 @@ module Sossego
   #   between polls - as long as nothing earlier on the thread took a
   #   sticky lease (`lease_connection`), which would be held for the whole
   #   stream.
-  # - Runs inside {Sossego.around_poll} when one is set.
+  # - Runs inside {Sossego.around_poll} when one is set; otherwise, on
+  #   SQLite, on a read-only connection opened for the poll ({ReadonlyPolling}).
   class Source
     DEFAULT_BATCH_LIMIT = 100
 
@@ -101,7 +102,13 @@ module Sossego
     # inside {Sossego.around_poll} when one is configured.
     def quietly(&block)
       read = proc { Sossego::Event.uncached(&block) }
-      poll = Sossego.around_poll ? proc { Sossego.around_poll.call(read) } : read
+      poll = if Sossego.around_poll
+        proc { Sossego.around_poll.call(read) }
+      elsif ReadonlyPolling.applies?
+        proc { ReadonlyPolling.poll(&read) }
+      else
+        read
+      end
 
       logger = ActiveRecord::Base.logger
       logger.respond_to?(:silence) ? logger.silence(&poll) : poll.call

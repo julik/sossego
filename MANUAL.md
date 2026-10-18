@@ -184,20 +184,22 @@ It inherits from `ActionController::Base`, not your `ApplicationController`. A s
 |---|---|---|
 | `Sossego.retention` | 24 hours | How long events are kept. A client away for longer sees a gap. |
 | `Sossego.connects_to` | none | Put the table in its own database, like Solid Queue: `{database: {writing: :sossego}}` |
+| `Sossego.readonly_sqlite_polling` | true | SQLite: poll through a read-only connection opened for each poll. See below. |
 | `Sossego.around_poll` | none | Run each poll on another connection. See below. |
 | `Sossego.verifier` | `message_verifier("sossego_streams")` | Signs stream ids for the browser |
 | `Sossego.turbo_stream_renderer` | `-> { ApplicationController }` | Renders the templates of `publish_turbo_stream` |
 | `Sossego::Event.lock_timeout_ms` | 1000 | PostgreSQL: how long a publish waits for its stream's lock |
 
-**Which connection streams poll on.** By default each poll borrows the connection your app gives `Sossego::Event` and returns it at once. To poll somewhere else, use one of these:
+**Which connection streams poll on.** On SQLite, each poll opens the database file read-only, with the main connection's settings, and closes it once the poll is done. A stream never holds a connection between polls and can never take the write lock. Polls use the main connection instead in two cases: when Rails has pinned a connection for a transactional test, whose rows a separate connection couldn't see, and when the polling thread is itself inside a transaction. `Sossego.readonly_sqlite_polling = false` turns this off.
+
+On other databases each poll borrows the connection your app gives `Sossego::Event` and returns it at once. To poll somewhere else, wrap the poll:
 
 ```ruby
 # a reading role (a replica), declared in database.yml
 Sossego.around_poll = ->(poll) { Sossego.connection_class.connected_to(role: :reading) { poll.call } }
-
-# SQLite: the same file opened read-only in a pool of its own, so polling never takes the write lock
-Sossego.poll_on_readonly_sqlite_connection! unless Rails.env.test?
 ```
+
+`around_poll`, when set, is used on SQLite too, instead of the read-only connection.
 
 A UUID primary key works if ids are generated in commit order (PostgreSQL 18's `uuidv7()` as the column default). Override `Sossego::Event.cursor_valid?` to accept them.
 
@@ -607,7 +609,7 @@ Sossego::Event.for_stream("account:#{account.id}:inbox").where(event_name: "inbo
 Sossego::Event.for_stream(stream.id).order(:id).map { [_1.event_name, _1.value] }  # value decodes the payload
 ```
 
-Inside transactional tests, `publish_after_commit` publishes at once. Don't call `Sossego.poll_on_readonly_sqlite_connection!` in tests.
+Inside transactional tests, `publish_after_commit` publishes at once, and streams on SQLite poll through the test's own connection, so they see the test's rows.
 
 **JavaScript.**
 

@@ -113,6 +113,7 @@ Moneymaker's binary support (A4) and its compression (B1) are back under this sc
 ### B8. Readonly connection for polling (SQLite)
 - **Moneymaker:** the body polls through `ReadonlyEvent`, a model with its own connection pool opened with `readonly: true` (SQLITE_OPEN_READONLY), created lazily under a mutex. It is skipped in tests because of transactional fixtures.
 - **Cora:** none. It relies on queries not leasing a connection while asleep.
+- **Revised 18 Oct 2026:** on SQLite it is now automatic, with no helper to call. Each poll opens the database read-only, with the main connection's settings, and closes it right after. Polls stay on the main connection under a pinned test connection, or inside a transaction. `Sossego.readonly_sqlite_polling = false` turns it off. `poll_on_readonly_sqlite_connection!` is gone. The earlier decision follows.
 - **Decided 18 Oct 2026:**
   - **Default:** each poll uses whatever connection the app gives `Sossego::Event`.
   - **`Sossego.around_poll`:** a callable that wraps every poll, so the app decides which connection the poll runs on.
