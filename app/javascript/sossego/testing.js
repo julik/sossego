@@ -1,5 +1,5 @@
 /**
- * Test helpers for sossego streams.
+ * Test helpers for code that uses sossego streams: `import { installFakeEventSource } from "sossego/testing"`.
  *
  * `FakeEventSource` is a minimal stand-in for the browser's native
  * EventSource that can be driven manually in tests. Install it via

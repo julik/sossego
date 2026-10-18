@@ -12,9 +12,16 @@
       "default": "./app/javascript/sossego.js"
     },
     "./stimulus": "./app/javascript/sossego/stimulus.js",
-    "./react": "./app/javascript/sossego/react.js",
+    "./react": {
+      "types": "./app/javascript/sossego/react.d.ts",
+      "default": "./app/javascript/sossego/react.js"
+    },
     "./highlight": "./app/javascript/sossego/highlight.js",
-    "./highlight.css": "./app/assets/stylesheets/sossego/highlight.css"
+    "./highlight.css": "./app/assets/stylesheets/sossego/highlight.css",
+    "./testing": {
+      "types": "./app/javascript/sossego/testing.d.ts",
+      "default": "./app/javascript/sossego/testing.js"
+    }
   },
   "files": [
     "LICENSE.md",
@@ -23,7 +30,10 @@
     "app/javascript/sossego/stimulus.js",
     "app/javascript/sossego/react.js",
     "app/javascript/sossego/highlight.js",
-    "app/assets/stylesheets/sossego/highlight.css"
+    "app/assets/stylesheets/sossego/highlight.css",
+    "app/javascript/sossego/testing.js",
+    "app/javascript/sossego/react.d.ts",
+    "app/javascript/sossego/testing.d.ts"
   ],
   "peerDependencies": {
     "@hotwired/stimulus": ">=3",

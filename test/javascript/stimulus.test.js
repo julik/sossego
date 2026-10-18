@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { Application } from "@hotwired/stimulus"
 
 import SossegoController, { registerHandler, handlers, FINISHED_LINGER_MS, FADE_MS } from "sossego/stimulus"
-import { closeData, eventData, FakeEventSource, installFakeEventSource } from "./helpers.js"
+import { closeData, eventData, FakeEventSource, installFakeEventSource } from "sossego/testing"
 
 async function flush() {
   for (let i = 0; i < 30; i++) await Promise.resolve()

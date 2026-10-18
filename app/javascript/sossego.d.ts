@@ -39,7 +39,11 @@ export interface Frame<T = any> {
   pld: T
 }
 
-export function createSossegoStream<T = any>(opts: SossegoStreamOptions<T>): { close(): void }
+export interface SossegoStreamHandle {
+  close(): void
+}
+
+export function createSossegoStream<T = any>(opts: SossegoStreamOptions<T>): SossegoStreamHandle
 export function compareCursors(a: string, b: string): number
 export function maxCursor(a: string, b: string): string
 export function decodeFrame<T = any>(raw: string): Promise<Frame<T>>

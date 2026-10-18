@@ -260,7 +260,7 @@ These are generic enough for the library but not yet in it:
 - the silent-first-frame / three-strikes / fallback-cooldown state machine;
 - `catchUpOwed`.
 
-**DECIDE:** port into the gem client, perhaps as `createSharedStream`, or leave in Cora?
+**Decided 18 Oct 2026:** leave it in Cora for now, and port it when Cora moves to the gem's client, with Cora as the second real user. The architecture, the server contract, a proposed `createSharedStreams` API and the next iterations are in [shared-streams.md](shared-streams.md). Cora's checklist is `~/Code/every/cora/docs/plans/2026-10-18-chore-sossego-gem-migration-plan.md`, section 6. The gem now ships the test helpers both will need, as `sossego/testing` with types.
 
 ---
 

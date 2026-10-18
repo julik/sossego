@@ -3,7 +3,7 @@ import { renderHook, act } from "@testing-library/react"
 
 import { useSossegoStream } from "sossego/react"
 
-import { closeData, eventData, FakeEventSource, installFakeEventSource } from "./helpers.js"
+import { closeData, eventData, FakeEventSource, installFakeEventSource } from "sossego/testing"
 
 // Build the `data:` text of a `sossego` frame (the SSE event name is
 // "sossego"; the application's name rides inside the envelope as `evt`).
