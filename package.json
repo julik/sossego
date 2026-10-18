@@ -11,12 +11,18 @@
       "types": "./app/javascript/sossego.d.ts",
       "default": "./app/javascript/sossego.js"
     },
-    "./stimulus": "./app/javascript/sossego/stimulus.js",
+    "./stimulus": {
+      "types": "./app/javascript/sossego/stimulus.d.ts",
+      "default": "./app/javascript/sossego/stimulus.js"
+    },
     "./react": {
       "types": "./app/javascript/sossego/react.d.ts",
       "default": "./app/javascript/sossego/react.js"
     },
-    "./highlight": "./app/javascript/sossego/highlight.js",
+    "./highlight": {
+      "types": "./app/javascript/sossego/highlight.d.ts",
+      "default": "./app/javascript/sossego/highlight.js"
+    },
     "./highlight.css": "./app/assets/stylesheets/sossego/highlight.css",
     "./testing": {
       "types": "./app/javascript/sossego/testing.d.ts",
@@ -33,7 +39,9 @@
     "app/assets/stylesheets/sossego/highlight.css",
     "app/javascript/sossego/testing.js",
     "app/javascript/sossego/react.d.ts",
-    "app/javascript/sossego/testing.d.ts"
+    "app/javascript/sossego/testing.d.ts",
+    "app/javascript/sossego/stimulus.d.ts",
+    "app/javascript/sossego/highlight.d.ts"
   ],
   "peerDependencies": {
     "@hotwired/stimulus": ">=3",

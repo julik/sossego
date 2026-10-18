@@ -22,6 +22,7 @@ module Sossego
     initializer "sossego.helpers" do
       ActiveSupport.on_load(:action_controller_base) do
         helper Sossego::StreamsHelper
+        helper Sossego::ImportmapHelper
       end
     end
   end

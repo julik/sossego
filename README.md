@@ -159,7 +159,45 @@ Other helpers: `publish_warning`, `publish_error`, `publish_visit(url)`, `publis
 
 ## JavaScript
 
-With importmap-rails, the engine pins `sossego`, `sossego/stimulus` and `sossego/react`. With a bundler, install the same files from npm as `sossego`.
+The client is plain ES modules with `.d.ts` types, and needs no build step. The entry points are:
+
+| Entry point | What it is |
+|---|---|
+| `sossego` | The stream client |
+| `sossego/stimulus` | The Stimulus controller and its handlers |
+| `sossego/highlight` | Highlights the fields `field_prefill` filled |
+| `sossego/react` | `useSossegoStream` |
+| `sossego/testing` | `FakeEventSource` for your tests |
+
+### Getting the JS into your app
+
+How you get it depends on how your app loads JavaScript.
+
+**importmap-rails with Propshaft or Sprockets.** There's nothing to do. The engine adds its files to the asset path and pins `sossego`, `sossego/stimulus`, `sossego/highlight` and `sossego/react`.
+
+**An importmap you write yourself** (served by assiette, say, or hand-rolled). The engine serves the files itself, under the path it's mounted at. Their digested URLs can be cached forever. Merge the helper's entries into your map:
+
+```ruby
+map = {imports: {...your pins...}, integrity: {...}}
+map.merge!(sossego_importmap) { |_key, yours, ours| yours.merge(ours) }  # add also: %w[sossego/react] if needed
+tag.script(map.to_json.html_safe, type: "importmap")
+```
+
+```erb
+<link rel="stylesheet" href="<%= sossego_asset_path("sossego/highlight.css") %>">
+```
+
+**A JS bundler with node_modules** (esbuild, Vite, webpack). Copy the package from the installed gem into your app, and link to the copy:
+
+```sh
+bin/rails sossego:js:vendor   # copies to vendor/javascript/sossego (DIR= to change)
+```
+
+```json
+"dependencies": { "sossego": "link:./vendor/javascript/sossego" }
+```
+
+Commit the copy. Run `bin/rails sossego:js:vendor` again after each gem upgrade, and add `bin/rails sossego:js:check` to CI: it fails when the copy or `node_modules/sossego` no longer matches the installed gem. The lockfile entry is a relative path, so it is the same on every machine and in Docker builds. There is more on why it works this way in [llm/outputs/js-packaging.md](llm/outputs/js-packaging.md).
 
 ### Plain JS
 
