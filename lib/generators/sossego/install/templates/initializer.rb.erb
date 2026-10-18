@@ -36,6 +36,11 @@ Sossego.retention = 24.hours
 # Defaults to Rails.application.message_verifier("sossego_streams").
 # Sossego.verifier = Rails.application.message_verifier("sossego_streams")
 
+# What renders the templates of Turbo Streams published with
+# `stream.publish_turbo_stream(:append, partial: ...)`. Defaults to
+# ApplicationController, as turbo-rails' broadcasts do.
+# Sossego.turbo_stream_renderer = -> { ApplicationController }
+
 # PostgreSQL only: how long a publish waits for its stream's lock before it
 # raises ActiveRecord::LockWaitTimeout. On SQLite the database's busy timeout
 # applies instead.

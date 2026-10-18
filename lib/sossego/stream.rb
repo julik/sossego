@@ -126,6 +126,24 @@ module Sossego
       Event.publish(stream_id: @id, event_name: event_name, payload: payload, after: after, fmt: fmt)
     end
 
+    # Publish a Turbo Stream: one action, built and rendered like turbo-rails'
+    # `broadcast_action_to`, or `<turbo-stream>` elements you have as strings.
+    # Every built-in action works, and custom ones. The event is
+    # `turbo_stream`; `@sossego/stimulus` renders it with
+    # `Turbo.renderStreamMessage`. See {TurboStream} for the options.
+    #
+    # @example
+    #   stream.publish_turbo_stream(:append, target: "comments", partial: "comments/comment", locals: {comment:})
+    #   stream.publish_turbo_stream(:replace, target: comment, partial: "comments/comment", locals: {comment:}, attributes: {method: :morph})
+    #   stream.publish_turbo_stream(:remove, target: comment)
+    #   stream.publish_turbo_stream(:refresh)
+    #   stream.publish_turbo_stream(:notify, attributes: {message: "Saved"})   # Turbo.StreamActions.notify in the browser
+    #
+    # @return [Sossego::Event]
+    def publish_turbo_stream(*args, **options)
+      publish("turbo_stream", TurboStream.html_for(*args, **options))
+    end
+
     # Append an application event once every open database transaction has
     # committed, so the event never announces a change a reader cannot see
     # yet. When a transaction rolls back, nothing is published. With no

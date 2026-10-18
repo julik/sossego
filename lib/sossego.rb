@@ -7,6 +7,7 @@ require "stringio"
 require "active_support"
 require "active_support/core_ext"
 require "rails/engine"
+require "action_view"
 
 require_relative "sossego/version"
 
@@ -138,6 +139,19 @@ module Sossego
     #   Sossego.around_poll = ->(poll) { Sossego.connection_class.connected_to(role: :reading) { poll.call } }
     # @return [#call, nil]
     attr_accessor :around_poll
+
+    # Renders the templates of Turbo Streams ({TurboStream.render}): returns
+    # something that responds to `render`, like a controller class. Defaults to
+    # `ApplicationController`, as turbo-rails' broadcasts do.
+    #
+    # @example
+    #   Sossego.turbo_stream_renderer = -> { Admin::BaseController }
+    # @return [#call]
+    attr_writer :turbo_stream_renderer
+
+    def turbo_stream_renderer
+      @turbo_stream_renderer ||= -> { defined?(::ApplicationController) ? ::ApplicationController : ActionController::Base }
+    end
 
     # Signs and verifies stream ids handed to the browser (see
     # {Stream#signature}). Defaults to the application's message verifier
@@ -414,6 +428,7 @@ end
 require_relative "sossego/stream"
 require_relative "sossego/source"
 require_relative "sossego/streaming_body"
+require_relative "sossego/turbo_stream"
 require_relative "sossego/reporting"
 require_relative "sossego/enqueuing"
 require_relative "sossego/javascript"

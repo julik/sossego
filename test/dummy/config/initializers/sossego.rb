@@ -26,7 +26,7 @@ Sossego.retention = 24.hours
 # polling can never take the write lock. Nothing to declare in database.yml.
 # Not in tests: a connection of its own can't see a test's transaction.
 #
-#   Sossego.poll_on_readonly_sqlite_connection! unless Rails.env.test?
+Sossego.poll_on_readonly_sqlite_connection! unless Rails.env.test?
 #
 # Anything else, e.g. a shard:
 #
@@ -35,6 +35,11 @@ Sossego.retention = 24.hours
 # What signs the stream ids handed to the browser (Sossego::Stream#signature).
 # Defaults to Rails.application.message_verifier("sossego_streams").
 # Sossego.verifier = Rails.application.message_verifier("sossego_streams")
+
+# What renders the templates of Turbo Streams published with
+# `stream.publish_turbo_stream(:append, partial: ...)`. Defaults to
+# ApplicationController, as turbo-rails' broadcasts do.
+# Sossego.turbo_stream_renderer = -> { ApplicationController }
 
 # PostgreSQL only: how long a publish waits for its stream's lock before it
 # raises ActiveRecord::LockWaitTimeout. On SQLite the database's busy timeout

@@ -82,6 +82,35 @@ stream.publish("progress", "Step 4", after: 3)       # only if the newest sseq i
 
 Event names are yours, except `sossego`, `ping`, `close`, `open`, `error` and `message`, which raise `Sossego::ReservedEventName`.
 
+### Turbo Streams
+
+`publish_turbo_stream` builds a `<turbo-stream>` element and publishes it as a `turbo_stream` event. The `@sossego/stimulus` controller hands it to `Turbo.renderStreamMessage`. It takes the arguments of turbo-rails' `broadcast_action_to`, and turbo-rails isn't needed on the server:
+
+```ruby
+stream.publish_turbo_stream(:append, target: "comments", partial: "comments/comment", locals: {comment:})
+stream.publish_turbo_stream(:prepend, targets: ".feed", html: "<li>Hi</li>")
+stream.publish_turbo_stream(:replace, target: comment, partial: "comments/comment", locals: {comment:},
+  attributes: {method: :morph})
+stream.publish_turbo_stream(:remove, target: comment)          # a record becomes its dom_id
+stream.publish_turbo_stream(:refresh)                           # carries Turbo's request id, so the tab that caused it skips it
+stream.publish_turbo_stream(:notify, attributes: {message: "Saved"}, render: false)   # a custom action
+```
+
+- **Actions:** any Turbo Stream action. The built-in ones are `append`, `prepend`, `replace`, `update`, `remove`, `before`, `after` and `refresh`. A custom action is just a name. Register it in the browser with `Turbo.StreamActions.notify = function () { … this.getAttribute("message") … }`; its own attributes go in `attributes:`.
+- **Template:**
+  - `partial:` and `locals:`, `template:` or `renderable:` are rendered by `Sossego.turbo_stream_renderer`, which defaults to `ApplicationController`;
+  - `html:` or `content:` is used as it is;
+  - `render: false` leaves the template empty;
+  - `remove` and `refresh` have no template.
+- **Several actions in one event:** pass the elements as strings. `Sossego::TurboStream.tag(action, target:, template:, **attributes)` and `Sossego::TurboStream.render(action, **options)` build them.
+
+```ruby
+stream.publish_turbo_stream(Sossego::TurboStream.tag(:remove, target: "spinner"),
+                            Sossego::TurboStream.render(:update, target: "total", html: "42"))
+```
+
+To publish after the surrounding transaction commits: `stream.publish_after_commit("turbo_stream", Sossego::TurboStream.render(...))`.
+
 ### Publishing from inside a transaction
 
 `publish` writes inside the current transaction. If that transaction rolls back, the event goes with it. Until it commits, nobody can see the event. To announce a change only once it is visible, use `publish_after_commit`:
@@ -156,6 +185,7 @@ It inherits from `ActionController::Base`, not your `ApplicationController`. A s
 | `Sossego.connects_to` | none | Put the table in its own database, like Solid Queue: `{database: {writing: :sossego}}` |
 | `Sossego.around_poll` | none | Run each poll on another connection. See below. |
 | `Sossego.verifier` | `message_verifier("sossego_streams")` | Signs stream ids for the browser |
+| `Sossego.turbo_stream_renderer` | `-> { ApplicationController }` | Renders the templates of `publish_turbo_stream` |
 | `Sossego::Event.lock_timeout_ms` | 1000 | PostgreSQL: how long a publish waits for its stream's lock |
 
 **Which connection streams poll on.** By default each poll borrows the connection your app gives `Sossego::Event` and returns it at once. To poll somewhere else, use one of these:
@@ -196,7 +226,7 @@ A run always ends with `progress_finished`. On a failure, `error_message` comes 
 | `publish_warning(text)` | `progress_warning` | text |
 | `publish_error(text)` | `error_message` | text |
 | `publish_field_prefill(hash)` | `field_prefill` | `{"model[field]" => value}` |
-| `publish_turbo_stream(html)` | `turbo_stream` | `<turbo-stream>` HTML |
+| `publish_turbo_stream(action, **options)` or `(html, …)` | `turbo_stream` | `<turbo-stream>` HTML, see [Turbo Streams](#turbo-streams) |
 | `publish_visit(url)` | `visit` | URL |
 | `publish_finished` | `progress_finished` | none |
 | `publish_failure(error)` | `error_message` + `progress_finished` | `sossego_failure_message(error)`; override it to say less |

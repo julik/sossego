@@ -134,9 +134,14 @@ module Sossego
       publish_sossego_event("visit", url)
     end
 
-    # @param html [String] one or more `<turbo-stream>` elements
-    def publish_turbo_stream(html)
-      publish_sossego_event("turbo_stream", html.to_s)
+    # Takes what {Stream#publish_turbo_stream} takes: an action and its
+    # options, or `<turbo-stream>` elements as strings. A template that fails
+    # to render raises, like any other error in the job, so the user is told.
+    #
+    # @example
+    #   publish_turbo_stream(:replace, target: txn, partial: "transactions/category", locals: {txn:})
+    def publish_turbo_stream(*args, **options)
+      publish_sossego_event("turbo_stream", TurboStream.html_for(*args, **options))
     end
 
     # Says what went wrong and stops the spinner. Always both events - an

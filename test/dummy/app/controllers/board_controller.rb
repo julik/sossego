@@ -13,8 +13,7 @@ class BoardController < ApplicationController
     counter = Counter.find(params[:id])
     counter.with_lock { counter.update!(value: counter.value + 1) }
 
-    html = render_to_string(turbo_stream: turbo_stream.replace(counter, partial: "board/counter", locals: {counter: counter}))
-    Counter::STREAM.publish("turbo_stream", html)
+    Counter::STREAM.publish_turbo_stream(:replace, target: counter, partial: "board/counter", locals: {counter: counter})
     head :no_content
   end
 end

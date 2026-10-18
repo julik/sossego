@@ -151,4 +151,37 @@ class Sossego::ReportingTest < ActiveJob::TestCase
     assert_equal "close", names.last
     assert_equal ["progress", "progress", "progress", "error_message", "progress_finished", "close"], names
   end
+
+  class TurboJob < ActiveJob::Base
+    include Sossego::Reporting
+
+    def perform(stream_id:, counter_id:)
+      counter = Counter.find(counter_id)
+      publish_turbo_stream(:replace, target: counter, partial: "board/counter", locals: {counter: counter})
+      publish_turbo_stream(:remove, target: "spinner")
+    end
+  end
+
+  class BrokenTurboJob < ActiveJob::Base
+    include Sossego::Reporting
+
+    def perform(stream_id:)
+      publish_turbo_stream(:append, target: "x", partial: "board/no_such_partial")
+    end
+  end
+
+  test "publish_turbo_stream takes an action and renders it" do
+    counter = Counter.create!(name: "Peace", value: 1)
+    TurboJob.perform_now(stream_id: @stream.id, counter_id: counter.id)
+
+    html = published.filter_map { |name, value| value if name == "turbo_stream" }
+    assert_match(/\A<turbo-stream action="replace" target="counter_#{counter.id}"><template>.*Peace/m, html.first)
+    assert_equal %(<turbo-stream action="remove" target="spinner"></turbo-stream>), html.last
+  end
+
+  test "a Turbo Stream that fails to render fails the job, which says so" do
+    assert_raises(ActionView::MissingTemplate) { BrokenTurboJob.perform_now(stream_id: @stream.id) }
+
+    assert_equal ["error_message", "progress_finished"], published.map(&:first)
+  end
 end

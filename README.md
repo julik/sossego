@@ -66,14 +66,13 @@ Publish Turbo Streams to it:
 ```ruby
 class Comment < ApplicationRecord
   after_create_commit do
-    html = ApplicationController.render(partial: "comments/comment", locals: {comment: self})
-    Sossego::Stream.for(account, :live).publish("turbo_stream",
-      ApplicationController.helpers.turbo_stream_action_tag(:append, target: "comments", template: html))
+    Sossego::Stream.for(account, :live)
+      .publish_turbo_stream(:append, target: "comments", partial: "comments/comment", locals: {comment: self})
   end
 end
 ```
 
-Every open page appends the comment. A page that was offline gets the comments it missed when it reconnects.
+Every open page appends the comment. A page that was offline gets the comments it missed when it reconnects. Any Turbo Stream action works: `replace`, `remove`, `refresh`, `replace` with `attributes: {method: :morph}`, and your own custom actions.
 
 ## A background job with a progress bar
 
@@ -111,7 +110,7 @@ class ImportJob < ApplicationJob
   def perform(file_id:, stream_id:)
     publish_progress("Reading the file...")
     rows = Import.new(file_id).run { |n| publish_progress("Imported #{n} rows...") }
-    publish_turbo_stream(render_summary(rows))
+    publish_turbo_stream(:replace, target: "summary", partial: "imports/summary", locals: {rows:})
   end
 end
 ```

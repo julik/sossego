@@ -25,6 +25,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency "activerecord", ">= 8.0"
   spec.add_dependency "activejob", ">= 8.0"
   spec.add_dependency "actionpack", ">= 8.0"
+  spec.add_dependency "actionview", ">= 8.0"
   spec.add_dependency "railties", ">= 8.0"
 
   spec.add_development_dependency "minitest"
