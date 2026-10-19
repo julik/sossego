@@ -225,8 +225,8 @@ Moneymaker's redirect flows (`InvoicePrefillJob`, `TransactionClassifyJob`) shou
 | `turbo` event, `Turbo.renderStreamMessage` | `turbo_stream` event |
 | `moneymaker:magic` on prefilled inputs, animated by the app's `magic-fields` controller | `sossego:prefilled`, animated by the gem's `@sossego/highlight` controller and `@sossego/highlight/highlight.css` (see E7) |
 | `sossego:complete`, `sossego:stalled`, `sossego:disconnected`, `sossego:event` | same names; `sossego:event` detail now carries `{eventName, payload, seq, sseq}`; new `sossego:closed` |
-| `event.decodedTextData` / `decodedBinaryData` given to handlers | handlers get `(payload, {controller, event})` with the decoded `pld` |
-| handlers fixed by import | `registerHandler(name, fn)`, or listen to `sossego:event` |
+| `event.decodedTextData` / `decodedBinaryData` given to handlers | methods get `(payload, event)` with the decoded `pld` |
+| handlers fixed by import | a subclass with `static events = {name: "method"}`, or listen to `sossego:event` / `sossego:event:<name>` |
 | global `document.querySelector` for the progress bar | the progress element inside the controller element first, then the document |
 
 **Decided 18 Oct 2026:** all the renames above are accepted: `turbo_stream`, the `data-sossego-*` attributes, and the state as an attribute value. Field highlighting ships as `@sossego/highlight` (E7). Moneymaker's side of this is in `~/Code/apps/moneymaker/llm/todos/sossego-migration.md`.

@@ -209,13 +209,13 @@ Every `Sossego::Stream` has helpers for the events the Stimulus controller handl
 
 | Helper | Event | Payload |
 |---|---|---|
-| `stream.publish_progress(text)` | `progress` | text |
-| `stream.publish_warning(text)` | `progress_warning` | text |
-| `stream.publish_error(text)` | `error_message` | text |
-| `stream.publish_field_prefill(hash)` | `field_prefill` | `{"model[field]" => value}` |
-| `stream.publish_turbo_stream(action, **options)` or `(html, …)` | `turbo_stream` | `<turbo-stream>` HTML, see [Turbo Streams](#turbo-streams) |
-| `stream.publish_visit(url)` | `visit` | URL |
-| `stream.publish_finished` | `progress_finished` | none |
+| `stream.publish_progress(text)` | `progress` | `progress` | text |
+| `stream.publish_warning(text)` | `progress_warning` | `progressWarning` | text |
+| `stream.publish_error(text)` | `error_message` | `errorMessage` | text |
+| `stream.publish_field_prefill(hash)` | `field_prefill` | `fieldPrefill` | `{"model[field]" => value}` |
+| `stream.publish_turbo_stream(action, **options)` or `(html, …)` | `turbo_stream` | `turboStream` | `<turbo-stream>` HTML, see [Turbo Streams](#turbo-streams) |
+| `stream.publish_visit(url)` | `visit` | `visit` | URL |
+| `stream.publish_finished` | `progress_finished` | `progressFinished` | none |
 
 `Sossego::PublishingHelpers` is for a job that a page watches. It gives the job its `stream`, read from the `stream_id:` argument (set `sossego_stream_argument` to use another name), and makes sure the page hears how the job ended:
 
@@ -360,10 +360,10 @@ stream.close()
 | `task-timeout` | 180000 | ms. Keep it above the longest silence a healthy task can have, like one slow LLM call. |
 | `stalled-message`, `reconnecting-message`, `closed-message` | English | What the progress element says in those cases |
 
-Built-in handlers, by event name:
+Built-in events, and the methods that handle them:
 
-| Event | What it does |
-|---|---|
+| Event | Method | What it does |
+|---|---|---|
 | `progress` | Shows the text, state `working` |
 | `progress_warning` | Shows the text, state `warning`, for 5 s, then fades |
 | `error_message` | Shows the text, state `error`, and keeps it up |
@@ -374,11 +374,12 @@ Built-in handlers, by event name:
 
 The progress element is `[data-sossego-progress]` inside the controller's element, or anywhere on the page. Its attribute value is the state (`working`, `warning`, `error`, `finished`), and `data-sossego-fading` is present while it fades. Style it with attribute selectors.
 
-Add your own handlers with `registerHandler("name", (payload, { controller, event }) => …)`, or listen to DOM events. They bubble from the controller's element:
+Add your own events in a subclass (see [Handling your own events](#handling-your-own-events)), or listen to DOM events. They bubble from the controller's element:
 
 | DOM event | When |
 |---|---|
 | `sossego:event` | Every event; detail `{eventName, payload, seq, sseq}`. For example `data-action="sossego:event->board#refresh"`. |
+| `sossego:event:<name>` | One event by name, same detail. For example `data-action="sossego:event:poof->gallery#show"`. |
 | `sossego:complete` | A task settled: finished, warned or failed |
 | `sossego:stalled` | An awaited task went silent |
 | `sossego:closed` | The stream ended; detail `{reason, seq}` |
@@ -402,7 +403,7 @@ Fields that fire `sossego:prefilled` pulse one after another, and the first is s
 
 ## Handling your own events
 
-> **Draft. Julik to review.** This is how I meant it to be used. The two notes at the end are open questions.
+> **Draft. Julik to review.** This is how I meant it to be used.
 
 ### How an event reaches your code
 
@@ -410,7 +411,7 @@ Fields that fire `sossego:prefilled` pulse one after another, and the first is s
 2. **Wire.** Every one of your events arrives as one SSE frame named `sossego`. Your name (`"poof"`) is inside the frame, next to the format and the payload.
 3. **Decoding.** The client turns the payload back into a value: a JSON value, a string, or a `Uint8Array` for bytes. Gzipped formats are inflated first. Your handler gets the value; there is nothing to decode yourself.
 4. **One at a time.** Each stream has a queue that takes one frame at a time: decode it, call its handler, then take the next frame. Handlers are always called in the order the events were published, and a stream never inflates two payloads at once. A page with three streams has three queues.
-5. **Routing.** The handler registered for the event's name runs. There are three ways to register one, below.
+5. **Routing.** The handler for the event's name runs. There are three ways to provide one, below.
 
 ### Without TypeScript
 
@@ -420,30 +421,50 @@ Server:
 stream.publish("poof", png_bytes, fmt: :bytes)       # or fmt: "gz:bytes" to gzip it
 ```
 
-**With the Stimulus controller** (`data-controller="sossego"` already on the page), register a handler once, next to `application.register`:
+**With the Stimulus controller**, subclass it. `static events` maps an event name to the method that handles it, which gets the payload and the event. The built-in events stay:
 
 ```js
-import { registerHandler } from "@sossego/stimulus"
+// app/javascript/controllers/gallery_controller.js
+import SossegoController from "@sossego/stimulus"
 
-registerHandler("poof", (bytes, { controller, event }) => {
-  const img = controller.element.querySelector("img.poof")
-  img.src = URL.createObjectURL(new Blob([bytes], { type: "image/png" }))
-})
-```
+export default class extends SossegoController {
+  static events = { poof: "showPoof" }
 
-**From a Stimulus controller of your own**, with no registration: every event also bubbles up as `sossego:event`.
-
-```erb
-<div data-controller="sossego gallery" data-sossego-url-value="..." data-action="sossego:event->gallery#received">
-```
-
-```js
-received({ detail: { eventName, payload } }) {
-  if (eventName === "poof") this.show(payload)
+  showPoof(bytes, event) {
+    const img = this.element.querySelector("img.poof")
+    img.src = URL.createObjectURL(new Blob([bytes], { type: "image/png" }))
+  }
 }
 ```
 
-This is a DOM event. It is dispatched just before the registered handler for the same event is called.
+```erb
+<div data-controller="gallery" data-gallery-url-value="<%= sossego_signed_stream_path(@stream) %>">
+```
+
+To change a built-in, override its method. `super` still works:
+
+```js
+progressFinished(payload, event) {
+  super.progressFinished(payload, event)
+  this.dispatch("saved")
+}
+```
+
+The handlers belong to the class: two elements with `data-controller="gallery"` behave the same, and a plain `sossego` controller elsewhere on the page doesn't know about `poof`. An event mapped to a method that doesn't exist is logged as an error.
+
+**From a Stimulus controller of your own**, with no subclass: every event also bubbles up as `sossego:event:<name>`, and as `sossego:event` for all of them.
+
+```erb
+<div data-controller="sossego gallery" data-sossego-url-value="..." data-action="sossego:event:poof->gallery#show">
+```
+
+```js
+show({ detail: { payload } }) {
+  // payload is the bytes
+}
+```
+
+These are DOM events. They are dispatched just before the method for the same event is called.
 
 **Without Stimulus:**
 
@@ -456,14 +477,16 @@ createSossegoStream({
 })
 ```
 
-`registerHandler` can also replace a built-in handler: `registerHandler("progress", …)` takes over progress messages for every controller on the page.
-
 ### With TypeScript
 
 The same code. Annotate the payload with what you published:
 
 ```ts
-registerHandler("poof", async (bytes: Uint8Array<ArrayBuffer>, { controller }) => { /* ... */ })
+export default class GalleryController extends SossegoController {
+  static events = { poof: "showPoof" }
+
+  showPoof(bytes: Uint8Array<ArrayBuffer>, event: SossegoEvent) { /* ... */ }
+}
 
 createSossegoStream({ url, events: { poof: (bytes: Uint8Array<ArrayBuffer>) => show(bytes) } })
 ```
@@ -516,10 +539,6 @@ createSossegoStream({
 
 - **Errors don't stop the stream.** A handler that throws, or returns a promise that rejects, goes to `onError` (the Stimulus controller logs it).
 - **Built-in handlers return at once.** `progress_finished` and `progress_warning` fire `sossego:complete` right away and let the bar linger and fade on its own. A newer message stops the fade, so a task that starts during the linger keeps its bar. `field_prefill` fills fields 300 ms apart. Two prefills that arrive close together can interleave; fields from one event still go in document order.
-
-### Open questions
-
-- **The Stimulus registry is global.** It holds one handler per name for every `sossego` controller on the page; for per-element behaviour, use `sossego:event`. Dispatching a DOM event per name as well (`sossego:poof`) would allow `data-action="sossego:poof->gallery#show"`.
 
 ## Using with React
 

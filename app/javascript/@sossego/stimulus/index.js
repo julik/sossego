@@ -17,11 +17,20 @@
  *     </div>
  *   </div>
  *
- * Every event goes, in wire order, to the handler registered for its name
- * (see `handlers` and `registerHandler`), and is also announced as a
- * bubbling `sossego:event` DOM event with `{eventName, payload, seq, sseq}`
- * as its detail, so a page can react with plain Stimulus actions:
- * `data-action="sossego:event->board#refresh"`.
+ * Every event goes, in wire order, to the method `static events` maps its
+ * name to. A subclass adds its own events, or overrides a built-in's method:
+ *
+ *   export default class extends SossegoController {
+ *     static events = { poof: "showPoof" }
+ *     showPoof(bytes, event) { ... }
+ *     progressFinished(payload, event) { super.progressFinished(payload, event); ... }
+ *   }
+ *
+ * Every event is also announced as two bubbling DOM events, with
+ * `{eventName, payload, seq, sseq}` as their detail, so a page can react with
+ * plain Stimulus actions: `sossego:event` for all of them
+ * (`data-action="sossego:event->board#refresh"`), and `sossego:event:<name>`
+ * for one (`data-action="sossego:event:poof->gallery#show"`).
  *
  * Other DOM events, all bubbling from the controller element:
  *
@@ -155,99 +164,48 @@ function setFieldValue(input, value) {
   return false
 }
 
-/**
- * Handlers by event name. Each gets the decoded payload and
- * `{controller, event}`. Handlers are called in wire order, but a handler
- * that returns a promise is not waited for: the next event is handled while
- * it runs. A rejection is logged.
- *
- * @type {Record<string, (payload: any, context: {controller: SossegoController, event: import("@sossego/client").SossegoEvent}) => void | Promise<void>>}
- */
-export const handlers = {
-  // Payload: the message to show.
-  progress(message, { controller }) {
-    showProgress(controller, "working", message)
-  },
+// Sets the named fields in document order, one by one, firing `change` and
+// `sossego:prefilled` on each one it changed.
+async function prefill(fields) {
+  const updates = Object.entries(fields ?? {})
+    .filter(([, value]) => value !== undefined && value !== null)
+    .map(([name, value]) => ({
+      input: document.querySelector(`input[type="checkbox"][name="${quoted(name)}"]`) ??
+        document.querySelector(`[name="${quoted(name)}"]`),
+      value,
+    }))
+    .filter(({ input }) => input)
+    .sort((a, b) => {
+      const pos = a.input.compareDocumentPosition(b.input)
+      if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1
+      if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1
+      return 0
+    })
 
-  // Payload: the message. Held for a while, then the bar fades, unless
-  // something newer is shown by then.
-  progress_warning(message, { controller }) {
-    const el = showProgress(controller, "warning", message)
-    complete(controller)
-    if (el) return lingerThenFade(el, generations.get(el), WARNING_LINGER_MS)
-  },
-
-  // Payload: the message. A reported error is the end of the task: the bar
-  // stays up so it can be read.
-  error_message(message, { controller }) {
-    showProgress(controller, "error", message)
-    complete(controller)
-  },
-
-  // No payload. A bar showing an error or warning stays; otherwise the
-  // last message lingers, then the bar fades, unless something newer is
-  // shown by then.
-  progress_finished(_payload, { controller }) {
-    complete(controller)
-    const el = progressElement(controller)
-    const state = el?.getAttribute("data-sossego-progress")
-    if (el && !el.hidden && state !== "error" && state !== "warning") {
-      return lingerThenFade(el, setState(el, "finished"), FINISHED_LINGER_MS)
+  for (const [i, { input, value }] of updates.entries()) {
+    if (setFieldValue(input, value)) {
+      input.dispatchEvent(new CustomEvent("sossego:prefilled", { bubbles: true }))
+      input.dispatchEvent(new Event("change", { bubbles: true }))
     }
-  },
-
-  // Payload: `{"model[field]": value, ...}`. Sets the named fields in
-  // document order, one by one, firing `change` and `sossego:prefilled` on
-  // each one it changed.
-  async field_prefill(fields, _context) {
-    const updates = Object.entries(fields ?? {})
-      .filter(([, value]) => value !== undefined && value !== null)
-      .map(([name, value]) => ({
-        input: document.querySelector(`input[type="checkbox"][name="${quoted(name)}"]`) ??
-          document.querySelector(`[name="${quoted(name)}"]`),
-        value,
-      }))
-      .filter(({ input }) => input)
-      .sort((a, b) => {
-        const pos = a.input.compareDocumentPosition(b.input)
-        if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1
-        if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1
-        return 0
-      })
-
-    for (const [i, { input, value }] of updates.entries()) {
-      if (setFieldValue(input, value)) {
-        input.dispatchEvent(new CustomEvent("sossego:prefilled", { bubbles: true }))
-        input.dispatchEvent(new Event("change", { bubbles: true }))
-      }
-      if (i < updates.length - 1) await sleep(PREFILL_STAGGER_MS)
-    }
-  },
-
-  // Payload: one or more `<turbo-stream>` elements as HTML.
-  turbo_stream(html, _context) {
-    window.Turbo.renderStreamMessage(html)
-  },
-
-  // Payload: the URL to go to.
-  visit(url, _context) {
-    if (!url) return
-    if (window.Turbo) {
-      window.Turbo.visit(url)
-    } else {
-      window.location.href = url
-    }
-  },
+    if (i < updates.length - 1) await sleep(PREFILL_STAGGER_MS)
+  }
 }
 
-/**
- * Add or replace the handler for an event name, for every controller.
- *
- * @param {string} eventName
- * @param {(payload: any, context: {controller: SossegoController, event: import("@sossego/client").SossegoEvent}) => void | Promise<void>} handler
- */
-export function registerHandler(eventName, handler) {
-  handlers[eventName] = handler
+// The merged `static events` of a controller class and its ancestors,
+// nearest last so a subclass overrides what it inherits.
+const eventMaps = new WeakMap()
+
+function eventsOf(constructor) {
+  let events = eventMaps.get(constructor)
+  if (!events) {
+    const maps = []
+    for (let c = constructor; c && c !== Controller; c = Object.getPrototypeOf(c)) {
+      if (Object.hasOwn(c, "events")) maps.unshift(c.events)
+    }
+    events = Object.assign(Object.create(null), ...maps)
+    eventMaps.set(constructor, events)
+  }
+  return events
 }
 
 export default class SossegoController extends Controller {
@@ -259,6 +217,19 @@ export default class SossegoController extends Controller {
     stalledMessage: { type: String, default: "Nothing came back from the server. The task did not run - please try again." },
     reconnectingMessage: { type: String, default: "Trying to reach the server..." },
     closedMessage: { type: String, default: "Lost the connection to the server. Reload the page to try again." },
+  }
+
+  // Event name => the method that handles it, called with the decoded
+  // payload and the whole event. A subclass lists its own events; they are
+  // merged over these.
+  static events = {
+    progress: "progress",
+    progress_warning: "progressWarning",
+    error_message: "errorMessage",
+    progress_finished: "progressFinished",
+    field_prefill: "fieldPrefill",
+    turbo_stream: "turboStream",
+    visit: "visit",
   }
 
   connect() {
@@ -328,9 +299,16 @@ export default class SossegoController extends Controller {
     }
 
     const { eventName, payload, seq, sseq } = event
-    this.dispatch("event", { prefix: "sossego", detail: { eventName, payload, seq, sseq } })
+    const detail = { eventName, payload, seq, sseq }
+    this.dispatch("event", { prefix: "sossego", detail })
+    this.dispatch(`event:${eventName}`, { prefix: "sossego", detail })
 
-    return handlers[eventName]?.(payload, { controller: this, event })
+    const method = eventsOf(this.constructor)[eventName]
+    if (!method) return
+    if (typeof this[method] !== "function") {
+      throw new Error(`static events maps ${eventName} to ${method}, which is not a method of ${this.identifier}`)
+    }
+    return this[method](payload, event)
   }
 
   frameArrived() {
@@ -371,5 +349,62 @@ export default class SossegoController extends Controller {
     this.close()
     showProgress(this, "error", this.stalledMessageValue)
     this.dispatch("stalled", { prefix: "sossego" })
+  }
+
+  // Built-in events. Called in wire order, but a method that returns a
+  // promise is not waited for: the next event is handled while it runs.
+
+  // Payload: the message to show.
+  progress(message, _event) {
+    showProgress(this, "working", message)
+  }
+
+  // Payload: the message. Held for a while, then the bar fades, unless
+  // something newer is shown by then.
+  progressWarning(message, _event) {
+    const el = showProgress(this, "warning", message)
+    complete(this)
+    if (el) return lingerThenFade(el, generations.get(el), WARNING_LINGER_MS)
+  }
+
+  // Payload: the message. A reported error is the end of the task: the bar
+  // stays up so it can be read.
+  errorMessage(message, _event) {
+    showProgress(this, "error", message)
+    complete(this)
+  }
+
+  // No payload. A bar showing an error or warning stays; otherwise the
+  // last message lingers, then the bar fades, unless something newer is
+  // shown by then.
+  progressFinished(_payload, _event) {
+    complete(this)
+    const el = progressElement(this)
+    const state = el?.getAttribute("data-sossego-progress")
+    if (el && !el.hidden && state !== "error" && state !== "warning") {
+      return lingerThenFade(el, setState(el, "finished"), FINISHED_LINGER_MS)
+    }
+  }
+
+  // Payload: `{"model[field]": value, ...}`. Sets the named fields in
+  // document order, one by one, firing `change` and `sossego:prefilled` on
+  // each one it changed.
+  fieldPrefill(fields, _event) {
+    return prefill(fields)
+  }
+
+  // Payload: one or more `<turbo-stream>` elements as HTML.
+  turboStream(html, _event) {
+    window.Turbo.renderStreamMessage(html)
+  }
+
+  // Payload: the URL to go to.
+  visit(url, _event) {
+    if (!url) return
+    if (window.Turbo) {
+      window.Turbo.visit(url)
+    } else {
+      window.location.href = url
+    }
   }
 }

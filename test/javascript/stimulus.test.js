@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { Application } from "@hotwired/stimulus"
 
-import SossegoController, { registerHandler, handlers, FINISHED_LINGER_MS, WARNING_LINGER_MS, FADE_MS } from "@sossego/stimulus"
+import SossegoController, { FINISHED_LINGER_MS, WARNING_LINGER_MS, FADE_MS } from "@sossego/stimulus"
 import { closeData, eventData, FakeEventSource, installFakeEventSource } from "@sossego/testing"
 
 async function flush() {
@@ -112,25 +112,112 @@ describe("sossego Stimulus controller", () => {
     expect(window.Turbo.renderStreamMessage).toHaveBeenCalledWith("<turbo-stream action='remove' target='x'></turbo-stream>")
   })
 
-  it("calls handlers in order without waiting for async ones", async () => {
+  // A subclass registered over the base one, on the same element.
+  async function useSubclass(Subclass) {
+    application.unload("sossego")
+    application.register("sossego", Subclass)
+    await flush()
+  }
+
+  it("calls the methods that static events names, in order, without waiting for async ones", async () => {
     vi.useFakeTimers()
     const order = []
-    registerHandler("slow", async (payload) => {
-      order.push(`start ${payload}`)
-      await new Promise((resolve) => setTimeout(resolve, 100))
-      order.push(`end ${payload}`)
-    })
-    registerHandler("fast", (payload) => order.push(`fast ${payload}`))
+    await useSubclass(
+      class extends SossegoController {
+        static events = { slow: "slow", fast: "fast" }
+
+        async slow(payload) {
+          order.push(`start ${payload}`)
+          await new Promise((resolve) => setTimeout(resolve, 100))
+          order.push(`end ${payload}`)
+        }
+
+        fast(payload, event) {
+          order.push(`fast ${payload} ${event.eventName}`)
+        }
+      },
+    )
 
     emit("slow", 1)
     emit("fast", 2)
     await vi.advanceTimersByTimeAsync(0)
-    expect(order).toEqual(["start 1", "fast 2"])
+    expect(order).toEqual(["start 1", "fast 2 fast"])
 
     await vi.advanceTimersByTimeAsync(200)
-    expect(order).toEqual(["start 1", "fast 2", "end 1"])
-    delete handlers.slow
-    delete handlers.fast
+    expect(order).toEqual(["start 1", "fast 2 fast", "end 1"])
+  })
+
+  it("keeps the built-in events in a subclass, which can override their methods and call super", async () => {
+    const seen = []
+    await useSubclass(
+      class extends SossegoController {
+        static events = { poof: "poof" }
+
+        poof(payload) {
+          seen.push(`poof ${payload}`)
+        }
+
+        errorMessage(message, event) {
+          super.errorMessage(message, event)
+          seen.push(`error ${message}`)
+        }
+      },
+    )
+
+    emit("poof", 1)
+    emit("progress", "Working...")
+    emit("error_message", "Boom")
+    await flush()
+
+    expect(seen).toEqual(["poof 1", "error Boom"])
+    expect(progress().getAttribute("data-sossego-progress")).toBe("error")
+    expect(progress().textContent).toBe("Boom")
+  })
+
+  it("does not leak a subclass's events into the base class", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    await useSubclass(
+      class extends SossegoController {
+        static events = { poof: "poof" }
+        poof() {}
+      },
+    )
+    emit("poof", 1)
+    await flush()
+    await useSubclass(SossegoController)
+
+    emit("poof", 2)
+    await flush()
+
+    expect(SossegoController.events).not.toHaveProperty("poof")
+    expect(consoleError).not.toHaveBeenCalled()
+    consoleError.mockRestore()
+  })
+
+  it("reports an event mapped to a method that does not exist", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    await useSubclass(
+      class extends SossegoController {
+        static events = { poof: "showPoof" }
+      },
+    )
+
+    emit("poof", 1)
+    await flush()
+
+    expect(consoleError).toHaveBeenCalledWith("Sossego:", expect.objectContaining({ message: expect.stringMatching(/poof to showPoof/) }))
+    consoleError.mockRestore()
+  })
+
+  it("announces each event by name too", async () => {
+    const poofs = []
+    client().addEventListener("sossego:event:poof", (e) => poofs.push(e.detail.payload))
+
+    emit("progress", "x")
+    emit("poof", 7)
+    await flush()
+
+    expect(poofs).toEqual([7])
   })
 
   it("completes a finished task at once, and a new task during the linger keeps its bar", async () => {

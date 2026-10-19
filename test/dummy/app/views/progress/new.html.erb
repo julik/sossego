@@ -4,12 +4,14 @@
   "Analyze" sends the stream URL to the server, which starts a job reporting to it.
 </p>
 
-<div data-controller="sossego demo-task"
-     data-sossego-url-value="<%= sossego_signed_stream_path(@stream) %>"
-     data-demo-task-url-value="<%= analyze_progress_path %>"
+<%# demo-task is the sossego controller, subclassed to handle an event of its own (receipt_read) %>
+<div data-controller="demo-task"
+     data-demo-task-url-value="<%= sossego_signed_stream_path(@stream) %>"
+     data-demo-task-analyze-url-value="<%= analyze_progress_path %>"
      data-action="sossego:complete->demo-task#done sossego:stalled->demo-task#done sossego:disconnected->demo-task#done">
 
   <%= render "progress_bar" %>
+  <p data-demo-task-target="confidence" hidden></p>
 
   <form class="expense" data-controller="sossego-highlight">
     <label>Vendor <input name="expense[vendor]"></label>

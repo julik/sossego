@@ -11,6 +11,8 @@ class DemoAnalysisJob < ActiveJob::Base
     sleep 1.5
     raise ArgumentError, "the receipt is upside down" if fail
 
+    stream.publish("receipt_read", {confidence: rand(0.6..0.99).round(2)})
+
     stream.publish_warning("The date was hard to read, please check it") if rand < 0.3
     stream.publish_progress("Filling in the form...")
     stream.publish_field_prefill(

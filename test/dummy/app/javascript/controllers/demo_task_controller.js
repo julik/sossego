@@ -1,23 +1,31 @@
-import { Controller } from "@hotwired/stimulus"
+import SossegoController from "@sossego/stimulus"
 
+// The sossego controller with one event of the demo's own, `receipt_read`.
 // Starts the demo job, telling the server which stream to report to, and
 // gives the buttons back once the task settles.
-export default class extends Controller {
-  static targets = ["button"]
-  static values = { url: String }
+export default class extends SossegoController {
+  static targets = ["button", "confidence"]
+  static values = { analyzeUrl: String }
+  static events = { receipt_read: "receiptRead" }
+
+  // Payload: `{"confidence": 0.87}`
+  receiptRead({ confidence }) {
+    this.confidenceTarget.hidden = false
+    this.confidenceTarget.textContent = `The model is ${Math.round(confidence * 100)}% sure of what it read.`
+  }
 
   async start({ params }) {
-    const sossego = this.element
     this.buttonTargets.forEach((b) => (b.disabled = true))
+    this.confidenceTarget.hidden = true
 
     // Arm the silence timer before the request, so a request that never
     // starts a task is noticed too.
-    sossego.dispatchEvent(new CustomEvent("sossego:await-task"))
+    this.awaitTask()
 
     const body = new FormData()
-    body.append("stream_url", sossego.dataset.sossegoUrlValue)
+    body.append("stream_url", this.urlValue)
     if (params.fail) body.append("fail", "1")
-    const response = await fetch(this.urlValue, {
+    const response = await fetch(this.analyzeUrlValue, {
       method: "POST",
       body,
       headers: { "X-CSRF-Token": document.querySelector("meta[name=csrf-token]")?.content },
