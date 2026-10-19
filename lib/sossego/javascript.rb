@@ -5,9 +5,9 @@ require "fileutils"
 require "pathname"
 
 module Sossego
-  # The JS client: the npm packages under `app/javascript/@sossego/`, one
-  # directory and package.json each (`@sossego/client`, `@sossego/stimulus`,
-  # ...). Paths are relative to `app/javascript`, so a file's path is also its
+  # The JS client: the npm packages under `app/javascript/@julik/`, one
+  # directory and package.json each (`@julik/sossego-client`,
+  # `@julik/sossego-stimulus`, ...). Paths are relative to `app/javascript`, so a file's path is also its
   # place in an importmap, a copy, or node_modules.
   #
   # It serves the files at digested URLs for apps that write their own
@@ -15,12 +15,15 @@ module Sossego
   # for `link:` dependencies ({#copy_to}), and tells whether such a copy still
   # matches the gem ({#stale_files}).
   class JavaScript
-    SCOPE = "@sossego"
+    SCOPE = "@julik"
+    # Every package of the gem is named `@julik/sossego-<part>`: the scope is
+    # shared with other packages, the prefix is not.
+    PREFIX = "sossego-"
     CONTENT_TYPES = {".js" => "text/javascript", ".css" => "text/css"}.freeze
 
     attr_reader :root
 
-    # @param root [String, Pathname] the directory that holds `@sossego/`
+    # @param root [String, Pathname] the directory that holds `@julik/`
     def initialize(root = File.expand_path("../../app/javascript", __dir__))
       @root = Pathname(root)
       @digests = {}
@@ -28,20 +31,20 @@ module Sossego
 
     # @return [Hash{String => Hash}] package name => its package.json
     def manifests
-      @manifests ||= root.join(SCOPE).children.select { |dir| dir.join("package.json").file? }.sort.to_h do |dir|
+      @manifests ||= package_dirs(root).select { |dir| dir.join("package.json").file? }.sort.to_h do |dir|
         manifest = JSON.parse(dir.join("package.json").read)
         [manifest.fetch("name"), manifest]
       end
     end
 
-    # @return [Array<String>] e.g. ["@sossego/client", "@sossego/highlight", ...]
+    # @return [Array<String>] e.g. ["@julik/sossego-client", "@julik/sossego-highlight", ...]
     def package_names = manifests.keys
 
     def version(package_name = "#{SCOPE}/client") = manifests.fetch(package_name).fetch("version")
 
     # @return [Hash{String => String}] bare specifier => file, e.g.
-    #   "@sossego/stimulus" => "@sossego/stimulus/index.js",
-    #   "@sossego/highlight/highlight.css" => "@sossego/highlight/highlight.css"
+    #   "@julik/sossego-stimulus" => "@julik/sossego-stimulus/index.js",
+    #   "@julik/sossego-highlight/highlight.css" => "@julik/sossego-highlight/highlight.css"
     def modules
       @modules ||= manifests.each_with_object({}) do |(name, manifest), modules|
         manifest.fetch("exports").each do |subpath, target|
@@ -87,11 +90,12 @@ module Sossego
       [200, headers, [root.join(relpath).binread]]
     end
 
-    # Replaces `dir/@sossego` with a copy of the packages. Anything else in
-    # `dir` is left alone.
+    # Replaces the `@julik/sossego-*` directories in `dir` with a copy of the
+    # packages, so one the gem no longer ships goes too. Anything else in
+    # `dir`, other `@julik` packages included, is left alone.
     def copy_to(dir)
       dir = Pathname(dir)
-      FileUtils.rm_rf(dir.join(SCOPE))
+      package_dirs(dir).each { |package_dir| FileUtils.rm_rf(package_dir) }
       files.each do |relpath|
         FileUtils.mkdir_p(dir.join(relpath).dirname)
         FileUtils.cp(root.join(relpath), dir.join(relpath))
@@ -102,7 +106,7 @@ module Sossego
     # gem's. Extra files in `dir` don't count: an install from npm or Git
     # brings its own.
     #
-    # @param dir [String, Pathname] holds `@sossego/` (a vendor dir, node_modules)
+    # @param dir [String, Pathname] holds `@julik/` (a vendor dir, node_modules)
     # @param package_names [Array<String>] the packages to compare
     # @return [Array<String>] empty when `dir` holds the same client as the gem
     def stale_files(dir, package_names = self.package_names)
@@ -118,6 +122,10 @@ module Sossego
     end
 
     private
+
+    def package_dirs(dir)
+      Pathname(dir).join(SCOPE).glob("#{PREFIX}*").select(&:directory?)
+    end
 
     def fingerprint(relpath)
       path = root.join(relpath)

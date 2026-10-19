@@ -8,7 +8,7 @@ module Sossego
   # or `update` with `method: "morph"`) and custom ones registered in the
   # browser with `Turbo.StreamActions`. turbo-rails is not needed on the server.
   #
-  # The `turbo_stream` handler of `@sossego/stimulus` hands the HTML to
+  # The `turbo_stream` handler of `@julik/sossego-stimulus` hands the HTML to
   # `Turbo.renderStreamMessage`.
   #
   # @example

@@ -8,9 +8,9 @@
  * each starting halfway through the one before. The first field is
  * scrolled into view. While highlighted, a field has the
  * `data-sossego-highlighted` attribute; the stylesheet
- * `@sossego/highlight/highlight.css` gives it a pulse, or style it yourself.
+ * `@julik/sossego-highlight/highlight.css` gives it a pulse, or style it yourself.
  *
- *   import SossegoHighlightController from "@sossego/highlight"
+ *   import SossegoHighlightController from "@julik/sossego-highlight"
  *   application.register("sossego-highlight", SossegoHighlightController)
  *
  *   <form data-controller="sossego-highlight">...</form>

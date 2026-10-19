@@ -85,7 +85,7 @@ Event names are yours, except `sossego`, `ping`, `close`, `open`, `error` and `m
 
 ### Turbo Streams
 
-`publish_turbo_stream` builds a `<turbo-stream>` element and publishes it as a `turbo_stream` event. The `@sossego/stimulus` controller hands it to `Turbo.renderStreamMessage`. It takes the arguments of turbo-rails' `broadcast_action_to`, and turbo-rails isn't needed on the server:
+`publish_turbo_stream` builds a `<turbo-stream>` element and publishes it as a `turbo_stream` event. The `@julik/sossego-stimulus` controller hands it to `Turbo.renderStreamMessage`. It takes the arguments of turbo-rails' `broadcast_action_to`, and turbo-rails isn't needed on the server:
 
 ```ruby
 stream.publish_turbo_stream(:append, target: "comments", partial: "comments/comment", locals: {comment:})
@@ -271,53 +271,64 @@ The failed hand-off is reported to `Rails.error` too, and so is a publish that f
 
 ## Getting the JavaScript into your app
 
-The client is five small npm packages under `app/javascript/@sossego/` in the gem. They are plain ES modules with `.d.ts` types and need no build step.
+The client is five small npm packages under `app/javascript/@julik/` in the gem, published to npm as `@julik/sossego-*`. They are plain ES modules with `.d.ts` types and need no build step.
 
 | Package | |
 |---|---|
-| `@sossego/client` | The stream client |
-| `@sossego/stimulus` | The Stimulus controller and its handlers |
-| `@sossego/highlight` | Highlights fields that were filled for the user; `@sossego/highlight/highlight.css` |
-| `@sossego/react` | `useSossegoStream` |
-| `@sossego/testing` | `FakeEventSource` and frame builders, for your tests |
+| `@julik/sossego-client` | The stream client |
+| `@julik/sossego-stimulus` | The Stimulus controller and its handlers |
+| `@julik/sossego-highlight` | Highlights fields that were filled for the user; `@julik/sossego-highlight/highlight.css` |
+| `@julik/sossego-react` | `useSossegoStream` |
+| `@julik/sossego-testing` | `FakeEventSource` and frame builders, for your tests |
 
-The add-ons import `@sossego/client` by name, so every setup must resolve that name.
+The add-ons import `@julik/sossego-client` by name, so every setup must resolve that name.
 
-**importmap-rails** (with Propshaft or Sprockets). Nothing to do: the engine adds the files to the asset path and pins them. `@sossego/react` is pinned but not preloaded; pin `react` yourself to use it. The stylesheet is `stylesheet_link_tag "@sossego/highlight/highlight"`.
+**importmap-rails** (with Propshaft or Sprockets). Nothing to do: the engine adds the files to the asset path and pins them. `@julik/sossego-react` is pinned but not preloaded; pin `react` yourself to use it. The stylesheet is `stylesheet_link_tag "@julik/sossego-highlight/highlight"`.
 
-**An importmap you write yourself** (assiette, hand-rolled). The engine serves the packages itself at `/sossego/js/<digest>/@sossego/…`. The URLs change when the content does, so they can be cached forever. Merge its entries into your map:
+**An importmap you write yourself** (assiette, hand-rolled). The engine serves the packages itself at `/sossego/js/<digest>/@julik/sossego-…`. The URLs change when the content does, so they can be cached forever. Merge its entries into your map:
 
 ```ruby
 map = {imports: {...your pins...}, integrity: {...}}
-map.merge!(sossego_importmap) { |_key, yours, ours| yours.merge(ours) }   # also: %w[@sossego/react] if needed
+map.merge!(sossego_importmap) { |_key, yours, ours| yours.merge(ours) }   # also: %w[@julik/sossego-react] if needed
 tag.script(map.to_json.html_safe, type: "importmap")
 ```
 
 ```erb
-<link rel="stylesheet" href="<%= sossego_asset_path("@sossego/highlight/highlight.css") %>">
+<link rel="stylesheet" href="<%= sossego_asset_path("@julik/sossego-highlight/highlight.css") %>">
 ```
 
-The entries come with SRI hashes. `@sossego/testing` is never mapped.
+The entries come with SRI hashes. `@julik/sossego-testing` is never mapped.
 
-**A bundler with node_modules** (esbuild, Vite, webpack). Copy the packages from the installed gem into your app, and link to the copies:
+**A bundler with node_modules** (esbuild, Vite, webpack). Install the packages from npm, at exactly the gem's version:
+
+```json
+"dependencies": {
+  "@julik/sossego-client": "0.1.0",
+  "@julik/sossego-stimulus": "0.1.0"
+}
+```
+
+When you upgrade the gem, upgrade these to its version. `bin/rails sossego:js:check` fails when what's in `node_modules` differs from the installed gem, so put it in CI.
+
+**The same, from the gem instead of npm**, for a gem from Git or a path, which npm doesn't have yet. Copy the packages from the installed gem into your app, and link to the copies:
 
 ```sh
-bin/rails sossego:js:vendor     # copies to vendor/javascript/@sossego/ (DIR= to change) and prints the lines below
+bin/rails sossego:js:vendor     # copies to vendor/javascript/@julik/sossego-*/ (DIR= to change) and prints the lines below
 ```
 
 ```json
 "dependencies": {
-  "@sossego/client": "link:./vendor/javascript/@sossego/client",
-  "@sossego/stimulus": "link:./vendor/javascript/@sossego/stimulus"
+  "@julik/sossego-client": "link:./vendor/javascript/@julik/sossego-client",
+  "@julik/sossego-stimulus": "link:./vendor/javascript/@julik/sossego-stimulus"
 }
 ```
 
-Use `file:` instead of `link:` with npm. Commit `vendor/javascript/@sossego`. After each gem upgrade, run the task again. `bin/rails sossego:js:check` fails when the copies, or what's in `node_modules`, differ from the installed gem, so put it in CI. The lockfile records only the relative path: the same on every machine and in Docker. [llm/outputs/js-packaging.md](llm/outputs/js-packaging.md) explains the choice: why not `file:` with yarn, why not a path into the gem's install directory.
+Use `file:` instead of `link:` with npm. Commit `vendor/javascript/@julik`. After each gem upgrade, run the task again. `bin/rails sossego:js:check` fails when the copies, or what's in `node_modules`, differ from the installed gem, so put it in CI. The lockfile records only the relative path: the same on every machine and in Docker. [llm/outputs/js-packaging.md](llm/outputs/js-packaging.md) explains the choice: why not `file:` with yarn, why not a path into the gem's install directory.
 
 ## The JavaScript client
 
 ```js
-import { createSossegoStream, compareCursors, maxCursor } from "@sossego/client"
+import { createSossegoStream, compareCursors, maxCursor } from "@julik/sossego-client"
 
 const stream = createSossegoStream({
   url: "/inbox_stream?account=42",
@@ -390,12 +401,12 @@ A form that starts its task after the page loaded dispatches `sossego:await-task
 ### Highlighting filled fields
 
 ```js
-import SossegoHighlightController from "@sossego/highlight"
+import SossegoHighlightController from "@julik/sossego-highlight"
 application.register("sossego-highlight", SossegoHighlightController)
 ```
 
 ```erb
-<%= stylesheet_link_tag "@sossego/highlight/highlight" %>
+<%= stylesheet_link_tag "@julik/sossego-highlight/highlight" %>
 <form data-controller="sossego-highlight">…</form>
 ```
 
@@ -425,7 +436,7 @@ stream.publish("poof", png_bytes, fmt: :bytes)       # or fmt: "gz:bytes" to gzi
 
 ```js
 // app/javascript/controllers/gallery_controller.js
-import SossegoController from "@sossego/stimulus"
+import SossegoController from "@julik/sossego-stimulus"
 
 export default class extends SossegoController {
   static events = { poof: "showPoof" }
@@ -469,7 +480,7 @@ These are DOM events. They are dispatched just before the method for the same ev
 **Without Stimulus:**
 
 ```js
-import { createSossegoStream } from "@sossego/client"
+import { createSossegoStream } from "@julik/sossego-client"
 
 createSossegoStream({
   url: "/poof_stream",
@@ -523,7 +534,7 @@ Sossego decodes events one at a time and calls their handlers in order. It doesn
 - **Work after an `await` runs alongside later events.** If that work must also keep the order, because each event depends on the one before, put it on a queue of your own. `createQueue` is the one Sossego uses itself:
 
 ```js
-import { createSossegoStream, createQueue } from "@sossego/client"
+import { createSossegoStream, createQueue } from "@julik/sossego-client"
 
 const inOrder = createQueue(1)           // one at a time; createQueue(4) allows four at once
 createSossegoStream({
@@ -543,7 +554,7 @@ createSossegoStream({
 ## Using with React
 
 ```jsx
-import { useSossegoStream } from "@sossego/react"
+import { useSossegoStream } from "@julik/sossego-react"
 
 function Inbox({ stream }) {
   const { status } = useSossegoStream({
@@ -615,7 +626,7 @@ The hook, to copy into your app:
 // app/javascript/hooks/useSossegoReload.js
 import { useEffect, useRef } from "react"
 import { router } from "@inertiajs/react"
-import { useSossegoStream } from "@sossego/react"
+import { useSossegoStream } from "@julik/sossego-react"
 
 // Reloads the given props when the stream says they changed, or that events were missed.
 export function useSossegoReload(stream, { only, debounce = 100, onMessage } = {}) {
@@ -663,7 +674,7 @@ Inside transactional tests, `publish_after_commit` publishes at once, and stream
 **JavaScript.**
 
 ```js
-import { installFakeEventSource, FakeEventSource, eventData, pingData, closeData } from "@sossego/testing"
+import { installFakeEventSource, FakeEventSource, eventData, pingData, closeData } from "@julik/sossego-testing"
 
 const uninstall = installFakeEventSource()
 // …render the code under test…

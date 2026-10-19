@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { Application } from "@hotwired/stimulus"
 
-import SossegoHighlightController from "@sossego/highlight"
+import SossegoHighlightController from "@julik/sossego-highlight"
 
 async function flush() {
   for (let i = 0; i < 10; i++) await Promise.resolve()

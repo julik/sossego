@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { gzipSync } from "node:zlib"
 
-import { createSossegoStream, decodeFrame } from "@sossego/client"
-import { eventData, FakeEventSource, frameData, installFakeEventSource } from "@sossego/testing"
+import { createSossegoStream, decodeFrame } from "@julik/sossego-client"
+import { eventData, FakeEventSource, frameData, installFakeEventSource } from "@julik/sossego-testing"
 
 async function flushMicrotasks() {
   for (let i = 0; i < 20; i++) await Promise.resolve()

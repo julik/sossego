@@ -126,7 +126,7 @@ module Sossego
       Event.publish(stream_id: @id, event_name: event_name, payload: payload, after: after, fmt: fmt)
     end
 
-    # Shows a message in the progress display (`@sossego/stimulus`).
+    # Shows a message in the progress display (`@julik/sossego-stimulus`).
     #
     # @param message [String]
     # @return [Sossego::Event]
@@ -177,7 +177,7 @@ module Sossego
     # Publish a Turbo Stream: one action, built and rendered like turbo-rails'
     # `broadcast_action_to`, or `<turbo-stream>` elements you have as strings.
     # Every built-in action works, and custom ones. The event is
-    # `turbo_stream`; `@sossego/stimulus` renders it with
+    # `turbo_stream`; `@julik/sossego-stimulus` renders it with
     # `Turbo.renderStreamMessage`. See {TurboStream} for the options.
     #
     # @example

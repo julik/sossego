@@ -53,11 +53,11 @@ sossego_prune:
   schedule: every hour
 ```
 
-With importmap-rails the JavaScript is already pinned: `@sossego/client`, `@sossego/stimulus`, `@sossego/highlight`. Register the Stimulus controller:
+With importmap-rails the JavaScript is already pinned: `@julik/sossego-client`, `@julik/sossego-stimulus`, `@julik/sossego-highlight`. Register the Stimulus controller:
 
 ```js
 // app/javascript/controllers/index.js
-import SossegoController from "@sossego/stimulus"
+import SossegoController from "@julik/sossego-stimulus"
 application.register("sossego", SossegoController)
 ```
 

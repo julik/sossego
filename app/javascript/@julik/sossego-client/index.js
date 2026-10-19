@@ -7,7 +7,7 @@
  * sossego.d.ts for TypeScript consumers.
  *
  * @example Resume from a known cursor and learn why the stream ended
- *   import { createSossegoStream } from "@sossego/client"
+ *   import { createSossegoStream } from "@julik/sossego-client"
  *
  *   const stream = createSossegoStream({
  *     url: "/inbox_stream?account=42",
@@ -20,7 +20,7 @@
  *   stream.close()
  *
  * @example Handle events by name
- *   import { createSossegoStream } from "@sossego/client"
+ *   import { createSossegoStream } from "@julik/sossego-client"
  *
  *   createSossegoStream({
  *     url,

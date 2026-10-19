@@ -6,23 +6,23 @@ require "tmpdir"
 class Sossego::JavaScriptTest < ActiveSupport::TestCase
   setup { @js = Sossego::JavaScript.new }
 
-  test "finds the five @sossego packages, all versioned in lockstep with the gem" do
-    assert_equal %w[@sossego/client @sossego/highlight @sossego/react @sossego/stimulus @sossego/testing], @js.package_names
+  test "finds the five @julik/sossego-* packages, all versioned in lockstep with the gem" do
+    assert_equal %w[@julik/sossego-client @julik/sossego-highlight @julik/sossego-react @julik/sossego-stimulus @julik/sossego-testing], @js.package_names
     @js.package_names.each { |name| assert_equal Sossego::VERSION, @js.version(name), name }
   end
 
-  test "add-ons ask for exactly this version of @sossego/client" do
+  test "add-ons ask for exactly this version of @julik/sossego-client" do
     @js.manifests.each do |name, manifest|
-      pinned = manifest.fetch("peerDependencies", {})["@sossego/client"]
+      pinned = manifest.fetch("peerDependencies", {})["@julik/sossego-client"]
       assert_equal Sossego::VERSION, pinned, name if pinned
     end
   end
 
   test "maps the exports to bare specifiers and the files behind them" do
-    assert_equal "@sossego/client/index.js", @js.modules.fetch("@sossego/client")
-    assert_equal "@sossego/stimulus/index.js", @js.modules.fetch("@sossego/stimulus")
-    assert_equal "@sossego/react/index.js", @js.modules.fetch("@sossego/react")
-    assert_equal "@sossego/highlight/highlight.css", @js.modules.fetch("@sossego/highlight/highlight.css")
+    assert_equal "@julik/sossego-client/index.js", @js.modules.fetch("@julik/sossego-client")
+    assert_equal "@julik/sossego-stimulus/index.js", @js.modules.fetch("@julik/sossego-stimulus")
+    assert_equal "@julik/sossego-react/index.js", @js.modules.fetch("@julik/sossego-react")
+    assert_equal "@julik/sossego-highlight/highlight.css", @js.modules.fetch("@julik/sossego-highlight/highlight.css")
   end
 
   test "lists in files every file the exports point to, and the gemspec ships them all" do
@@ -44,7 +44,7 @@ class Sossego::JavaScriptTest < ActiveSupport::TestCase
     Dir.mktmpdir do |dir|
       @js.copy_to(dir)
       copy = Sossego::JavaScript.new(dir)
-      relpath = "@sossego/client/index.js"
+      relpath = "@julik/sossego-client/index.js"
       assert_equal @js.digest(relpath), copy.digest(relpath)
       assert_match(/\Asha384-/, copy.integrity(relpath))
 
@@ -59,34 +59,37 @@ class Sossego::JavaScriptTest < ActiveSupport::TestCase
       @js.copy_to(dir)
       assert_empty @js.stale_files(dir)
 
-      File.write(File.join(dir, "@sossego/client/index.js"), "export {}\n")
-      File.delete(File.join(dir, "@sossego/react/index.js"))
-      File.write(File.join(dir, "@sossego/client/extra.js"), "export {}\n") # an npm or Git install has more files
-      assert_equal ["@sossego/client/index.js", "@sossego/react/index.js"], @js.stale_files(dir)
+      File.write(File.join(dir, "@julik/sossego-client/index.js"), "export {}\n")
+      File.delete(File.join(dir, "@julik/sossego-react/index.js"))
+      File.write(File.join(dir, "@julik/sossego-client/extra.js"), "export {}\n") # an npm or Git install has more files
+      assert_equal ["@julik/sossego-client/index.js", "@julik/sossego-react/index.js"], @js.stale_files(dir)
     end
   end
 
   test "compares only the packages asked about, so node_modules may hold a subset" do
     Dir.mktmpdir do |dir|
       @js.copy_to(dir)
-      FileUtils.rm_rf(File.join(dir, "@sossego/react"))
+      FileUtils.rm_rf(File.join(dir, "@julik/sossego-react"))
 
-      assert_equal %w[@sossego/client @sossego/highlight @sossego/stimulus @sossego/testing], @js.present_in(dir)
+      assert_equal %w[@julik/sossego-client @julik/sossego-highlight @julik/sossego-stimulus @julik/sossego-testing], @js.present_in(dir)
       assert_empty @js.stale_files(dir, @js.present_in(dir))
     end
   end
 
-  test "copying replaces @sossego and leaves the rest of the directory alone" do
+  test "copying replaces the @julik/sossego-* packages and leaves the rest of the directory alone" do
     Dir.mktmpdir do |dir|
-      FileUtils.mkdir_p(File.join(dir, "@sossego/old"))
-      File.write(File.join(dir, "@sossego/old/leftover.js"), "")
+      FileUtils.mkdir_p(File.join(dir, "@julik/sossego-old"))
+      File.write(File.join(dir, "@julik/sossego-old/leftover.js"), "")
+      FileUtils.mkdir_p(File.join(dir, "@julik/other-package"))
+      File.write(File.join(dir, "@julik/other-package/index.js"), "")
       File.write(File.join(dir, "other-vendored-lib.js"), "")
 
       @js.copy_to(dir)
 
-      refute File.exist?(File.join(dir, "@sossego/old"))
+      refute File.exist?(File.join(dir, "@julik/sossego-old"))
+      assert File.exist?(File.join(dir, "@julik/other-package/index.js"))
       assert File.exist?(File.join(dir, "other-vendored-lib.js"))
-      assert_equal @js.manifests.fetch("@sossego/client"), JSON.parse(File.read(File.join(dir, "@sossego/client/package.json")))
+      assert_equal @js.manifests.fetch("@julik/sossego-client"), JSON.parse(File.read(File.join(dir, "@julik/sossego-client/package.json")))
     end
   end
 end

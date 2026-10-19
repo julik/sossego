@@ -1,5 +1,5 @@
 {
-  "name": "@sossego/client",
+  "name": "@julik/sossego-client",
   "version": "0.1.0",
   "description": "Client for Sossego: Server-Sent Events from a Rails database table",
   "license": "MIT",
@@ -16,6 +16,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/julik/sossego"
+    "url": "git+https://github.com/julik/sossego.git",
+    "directory": "app/javascript/@julik/sossego-client"
+  },
+  "homepage": "https://github.com/julik/sossego#readme",
+  "bugs": "https://github.com/julik/sossego/issues",
+  "publishConfig": {
+    "access": "public"
   }
 }

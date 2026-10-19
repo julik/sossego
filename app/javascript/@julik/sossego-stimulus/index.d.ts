@@ -1,5 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
-import type { SossegoEvent } from "@sossego/client"
+import type { SossegoEvent } from "@julik/sossego-client"
 
 export const FINISHED_LINGER_MS: number
 export const WARNING_LINGER_MS: number

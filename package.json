@@ -1,9 +1,9 @@
 {
   "name": "sossego-workspace",
   "private": true,
-  "description": "Development workspace for the @sossego/* packages in app/javascript/@sossego",
+  "description": "Development workspace for the @julik/sossego-* packages in app/javascript/@julik",
   "workspaces": [
-    "app/javascript/@sossego/*"
+    "app/javascript/@julik/sossego-*"
   ],
   "scripts": {
     "test": "vitest run"

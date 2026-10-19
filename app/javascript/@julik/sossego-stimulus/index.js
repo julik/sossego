@@ -6,7 +6,7 @@
  * Register it under any name; the examples use "sossego":
  *
  *   import { application } from "controllers/application"
- *   import SossegoController from "@sossego/stimulus"
+ *   import SossegoController from "@julik/sossego-stimulus"
  *   application.register("sossego", SossegoController)
  *
  *   <div data-controller="sossego"
@@ -57,7 +57,7 @@
  * slow LLM request, say.
  */
 import { Controller } from "@hotwired/stimulus"
-import { createSossegoStream } from "@sossego/client"
+import { createSossegoStream } from "@julik/sossego-client"
 
 // For a value inside a double-quoted attribute selector.
 const quoted = (value) => String(value).replace(/["\\]/g, "\\$&")

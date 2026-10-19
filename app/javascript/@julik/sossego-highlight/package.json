@@ -1,5 +1,5 @@
 {
-  "name": "@sossego/highlight",
+  "name": "@julik/sossego-highlight",
   "version": "0.1.0",
   "description": "Stimulus controller that highlights fields Sossego (or your code) filled in",
   "license": "MIT",
@@ -21,6 +21,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/julik/sossego"
+    "url": "git+https://github.com/julik/sossego.git",
+    "directory": "app/javascript/@julik/sossego-highlight"
+  },
+  "homepage": "https://github.com/julik/sossego#readme",
+  "bugs": "https://github.com/julik/sossego/issues",
+  "publishConfig": {
+    "access": "public"
   }
 }

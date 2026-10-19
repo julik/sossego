@@ -1,7 +1,7 @@
 import { application } from "controllers/application"
 import { eagerLoadControllersFrom } from "@hotwired/stimulus-loading"
-import SossegoController from "@sossego/stimulus"
-import SossegoHighlightController from "@sossego/highlight"
+import SossegoController from "@julik/sossego-stimulus"
+import SossegoHighlightController from "@julik/sossego-highlight"
 
 application.register("sossego", SossegoController)
 application.register("sossego-highlight", SossegoHighlightController)

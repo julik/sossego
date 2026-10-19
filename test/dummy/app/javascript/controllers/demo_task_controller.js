@@ -1,4 +1,4 @@
-import SossegoController from "@sossego/stimulus"
+import SossegoController from "@julik/sossego-stimulus"
 
 // The sossego controller with one event of the demo's own, `receipt_read`.
 // Starts the demo job, telling the server which stream to report to, and

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 
-import { createSossegoStream } from "@sossego/client"
-import { eventData, FakeEventSource, installFakeEventSource } from "@sossego/testing"
+import { createSossegoStream } from "@julik/sossego-client"
+import { eventData, FakeEventSource, installFakeEventSource } from "@julik/sossego-testing"
 
 const emit = (src, seq, eventName, body) =>
   src.simulateEvent("sossego", seq, eventData(eventName, seq, Number(seq), seq, body, "test:1:foo"))

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 
-import { decodeFrame, registerPayloadDecoder, SossegoDecodeError } from "@sossego/client"
-import { closeData, eventData, frameData, pingData } from "@sossego/testing"
+import { decodeFrame, registerPayloadDecoder, SossegoDecodeError } from "@julik/sossego-client"
+import { closeData, eventData, frameData, pingData } from "@julik/sossego-testing"
 
 describe("decodeFrame — ejson", () => {
   it("returns the envelope of a sossego frame with its pld", async () => {

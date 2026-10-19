@@ -1,5 +1,5 @@
 {
-  "name": "@sossego/stimulus",
+  "name": "@julik/sossego-stimulus",
   "version": "0.1.0",
   "description": "Stimulus controller for Sossego streams, with progress, prefill, Turbo Stream and visit handlers",
   "license": "MIT",
@@ -15,11 +15,17 @@
     "index.d.ts"
   ],
   "peerDependencies": {
-    "@sossego/client": "0.1.0",
+    "@julik/sossego-client": "0.1.0",
     "@hotwired/stimulus": ">=3"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/julik/sossego"
+    "url": "git+https://github.com/julik/sossego.git",
+    "directory": "app/javascript/@julik/sossego-stimulus"
+  },
+  "homepage": "https://github.com/julik/sossego#readme",
+  "bugs": "https://github.com/julik/sossego/issues",
+  "publishConfig": {
+    "access": "public"
   }
 }

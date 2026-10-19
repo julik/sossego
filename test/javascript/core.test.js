@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 
-import { createSossegoStream } from "@sossego/client"
-import { registerPayloadDecoder } from "@sossego/client"
-import { closeData, eventData, FakeEventSource, frameData, installFakeEventSource, pingData } from "@sossego/testing"
+import { createSossegoStream } from "@julik/sossego-client"
+import { registerPayloadDecoder } from "@julik/sossego-client"
+import { closeData, eventData, FakeEventSource, frameData, installFakeEventSource, pingData } from "@julik/sossego-testing"
 
 // Build the `data:` text of a `sossego` frame matching the Ruby
 // StreamingBody output. The application's name rides in the envelope as

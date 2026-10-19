@@ -153,7 +153,7 @@ The shared API should document these as requirements and check them where it can
 ## 6. Proposed gem API (when porting)
 
 ```js
-import { createSharedStreams } from "@sossego/client"
+import { createSharedStreams } from "@julik/sossego-client"
 
 const streams = createSharedStreams({
   lingerMs: 1_000,
@@ -174,8 +174,8 @@ Notes:
 - **The fallback stays a signal, not a callback that does something.** What "fallback" means is up to the app: Cora enables a WebSocket, another app might poll a JSON endpoint, Moneymaker would show "reload the page".
 - **Integrations:**
   - The Stimulus controller gets `data-sossego-shared-value="true"`, which subscribes through the default registry instead of opening its own stream. Several elements on a page can then listen to one stream.
-  - `@sossego/react` gets `useSharedStream(url, { cursor, onSignal })`.
-- **Port the tests as the spec.** `inboxStreamConnection.test.ts` has 49 cases in five groups (shared connection, knownHead, visibility, gaps, fallback), built on `FakeEventSource`, which the gem now ships as `@sossego/testing`. Port them before the implementation.
+  - `@julik/sossego-react` gets `useSharedStream(url, { cursor, onSignal })`.
+- **Port the tests as the spec.** `inboxStreamConnection.test.ts` has 49 cases in five groups (shared connection, knownHead, visibility, gaps, fallback), built on `FakeEventSource`, which the gem now ships as `@julik/sossego-testing`. Port them before the implementation.
 
 ## 7. Where to iterate next
 
@@ -206,7 +206,7 @@ Roughly in order of value.
 | | Location |
 |---|---|
 | Core client | `app/javascript/sossego.js` (`createSossegoStream`, `onGap`, cursors, decoders) |
-| Test helpers | `app/javascript/sossego/testing.js` (`FakeEventSource`, frame builders), as `@sossego/testing` |
+| Test helpers | `app/javascript/sossego/testing.js` (`FakeEventSource`, frame builders), as `@julik/sossego-testing` |
 | Shared layer (to port) | Cora `app/javascript/lib/client_push/inboxStreamConnection.ts` + `.test.ts` |
 | Page layer (pattern) | Cora `app/javascript/pages/Inbox/hooks/useInboxLiveUpdates.ts` + `.test.ts` |
 | Server options | `lib/sossego/streaming_body.rb`; Cora's endpoint `app/controllers/client_push/events_controller.rb` shows a full configuration |

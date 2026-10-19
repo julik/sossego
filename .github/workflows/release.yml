@@ -1,0 +1,81 @@
+name: Release
+
+# `rake release` pushes a vX.Y.Z tag. This tests the tag, then publishes the
+# gem and the npm packages with trusted publishing: no tokens are stored, and
+# the npm packages get provenance. RELEASING.md has the one-time setup.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - run: bundle exec rake release:versions
+        env:
+          TAG: ${{ github.ref_name }}
+
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  gem:
+    needs: [versions, ci]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - uses: rubygems/configure-rubygems-credentials@v2.1.0
+      - run: bundle exec rake release:gem
+
+  npm:
+    needs: [versions, ci]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      # Trusted publishing needs npm 11.5.1 or later
+      - run: npm install -g npm@latest
+      - run: bundle exec rake release:npm
+
+  github-release:
+    needs: [gem, npm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+      - run: bundle exec rake release:notes > notes.md
+      - run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}

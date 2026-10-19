@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { Application } from "@hotwired/stimulus"
 
-import SossegoController, { FINISHED_LINGER_MS, WARNING_LINGER_MS, FADE_MS } from "@sossego/stimulus"
-import { closeData, eventData, FakeEventSource, installFakeEventSource } from "@sossego/testing"
+import SossegoController, { FINISHED_LINGER_MS, WARNING_LINGER_MS, FADE_MS } from "@julik/sossego-stimulus"
+import { closeData, eventData, FakeEventSource, installFakeEventSource } from "@julik/sossego-testing"
 
 async function flush() {
   for (let i = 0; i < 30; i++) await Promise.resolve()

@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
 import { renderHook, act } from "@testing-library/react"
 
-import { useSossegoStream } from "@sossego/react"
+import { useSossegoStream } from "@julik/sossego-react"
 
-import { closeData, eventData, FakeEventSource, installFakeEventSource } from "@sossego/testing"
+import { closeData, eventData, FakeEventSource, installFakeEventSource } from "@julik/sossego-testing"
 
 // Build the `data:` text of a `sossego` frame (the SSE event name is
 // "sossego"; the application's name rides inside the envelope as `evt`).

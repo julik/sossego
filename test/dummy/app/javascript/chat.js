@@ -1,5 +1,5 @@
 // The plain JS client, with no framework.
-import { createSossegoStream, maxCursor } from "@sossego/client"
+import { createSossegoStream, maxCursor } from "@julik/sossego-client"
 
 const root = document.getElementById("chat")
 const $ = (selector) => root.querySelector(selector)
