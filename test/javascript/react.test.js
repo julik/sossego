@@ -268,4 +268,22 @@ describe("useSossegoStream — lifecycle and event delivery", () => {
     expect(secondCallback).toHaveBeenCalledTimes(1)
     expect(FakeEventSource.instances.length).toBe(1)
   })
+
+  it("calls the events of the latest render, without reconnecting", async () => {
+    const first = vi.fn()
+    const second = vi.fn()
+    const { rerender } = renderHook(({ handler }) => useSossegoStream({ url: "/sync/events", events: { changed: handler } }), {
+      initialProps: { handler: first },
+    })
+    const source = FakeEventSource.lastInstance()
+    act(() => source.simulateOpen())
+
+    rerender({ handler: second })
+    emitSossego(source, { seq: "1", eventName: "changed", body: { id: 3 } })
+    await act(flushMicrotasks)
+
+    expect(first).not.toHaveBeenCalled()
+    expect(second).toHaveBeenCalledWith({ id: 3 }, expect.objectContaining({ eventName: "changed" }))
+    expect(FakeEventSource.instances.length).toBe(1)
+  })
 })

@@ -245,7 +245,8 @@ import { createSossegoStream, compareCursors, registerPayloadDecoder, decodeFram
 const stream = createSossegoStream({
   url: "/inbox_stream?account=42",
   lastEventId: "118",
-  onEvent: ({ eventName, seq, sseq, head, streamId, payload }) => { … },  // seq, head are strings
+  events:  { inbox_changed: (payload, event) => { … } },                 // by event name
+  onEvent: ({ eventName, seq, sseq, head, streamId, payload }) => { … },  // every event; seq, head are strings
   onGap:   (event, expectedSseq) => { … },                                // before an event that skipped
   onPing:  ({ head, time }) => { … },
   onClose: (reason, seq) => { … },                                        // seq null for a refusal
@@ -261,7 +262,7 @@ decodeFrame(raw)       // => { fmt, evt, seq?, sseq?, head?, sid?, pld } with pl
 - Every `data:` text goes through `decodeFrame`. `sossego` and `close` frames enter the sequential queue; `ping` does not.
 - Cursors are opaque strings compared only with `compareCursors`. Never `Number()`, never `Math.max`.
 - Gaps are decided from `sseq`: the client remembers the last `sseq` it delivered per stream; the next event's `sseq` being anything other than that plus one is a gap, reported to `onGap` before the event. A stream's first event, with no remembered `sseq`, is not a gap.
-- Routing by `eventName` is the application's job, through the dispatcher or otherwise.
+- Routing by `eventName` is the client's `events` option, or the application's own code in `onEvent`.
 - Connection errors are handled after the frames received before them, so a refusal's response ending is never reported as a failure.
 
 ## 9. Compatibility rules

@@ -317,15 +317,16 @@ Use `file:` instead of `link:` with npm. Commit `vendor/javascript/@sossego`. Af
 ## The JavaScript client
 
 ```js
-import { createSossegoStream, createDispatcher, compareCursors, maxCursor } from "@sossego/client"
-
-const events = createDispatcher()
-events.on("inbox_changed", (payload, event) => refresh())
+import { createSossegoStream, compareCursors, maxCursor } from "@sossego/client"
 
 const stream = createSossegoStream({
   url: "/inbox_stream?account=42",
   lastEventId: renderedCursor,           // resume from what the page rendered; omit to let the server decide
-  onEvent: events.dispatch,              // called in order; a returned promise is not waited for
+  events: {                              // by event name: (payload, event); names with no handler are ignored
+    inbox_changed: () => refresh(),
+    email_added: (email, event) => emails.add(email),
+  },
+  onEvent: (event) => {},                // every event, before its handler in `events`
   onGap: (event, expectedSseq) => refetchEverything(),
   onPing: ({ head, time }) => {},        // head: the stream's newest cursor
   onClose: (reason, seq) => {},          // seq is null when the server refused the stream
@@ -335,7 +336,8 @@ const stream = createSossegoStream({
 stream.close()
 ```
 
-- **Order:** each stream decodes its events one at a time and calls `onEvent` in the order they were published, even when decoding is async (gzip). A handler that returns a promise isn't waited for. See [Async handlers](#async-handlers).
+- **Order:** each stream decodes its events one at a time and calls their handlers in the order they were published, even when decoding is async (gzip). A handler that returns a promise isn't waited for. See [Async handlers](#async-handlers).
+- **Handlers can change:** `events` is read for each event, so adding or replacing a key on the same object takes effect from the next event. Each stream has its own handlers.
 - **Cursors** are strings. Compare them only with `compareCursors(a, b)` and `maxCursor(a, b)`, never with `<` or `Number()`.
 - **Resilience:** the client reopens a connection that goes quiet for 25 s. When the browser gives up on a connection, the client reopens it with a backoff from 3 s to 60 s. The `close` frame is the only thing that stops it.
 - **Formats:** custom payload formats register on both sides: `registerPayloadDecoder(fmt, fn)` here, `Sossego.encoders` / `Sossego.decoders` in Ruby.
@@ -446,11 +448,12 @@ This is a DOM event. It is dispatched just before the registered handler for the
 **Without Stimulus:**
 
 ```js
-import { createSossegoStream, createDispatcher } from "@sossego/client"
+import { createSossegoStream } from "@sossego/client"
 
-const events = createDispatcher()
-events.on("poof", (bytes, event) => show(bytes))
-createSossegoStream({ url: "/poof_stream", onEvent: events.dispatch })
+createSossegoStream({
+  url: "/poof_stream",
+  events: { poof: (bytes, event) => show(bytes) },
+})
 ```
 
 `registerHandler` can also replace a built-in handler: `registerHandler("progress", …)` takes over progress messages for every controller on the page.
@@ -462,10 +465,32 @@ The same code. Annotate the payload with what you published:
 ```ts
 registerHandler("poof", async (bytes: Uint8Array<ArrayBuffer>, { controller }) => { /* ... */ })
 
-events.on<Uint8Array<ArrayBuffer>>("poof", (bytes, event) => { /* ... */ })
+createSossegoStream({ url, events: { poof: (bytes: Uint8Array<ArrayBuffer>) => show(bytes) } })
 ```
 
-Use `Uint8Array<ArrayBuffer>`, not a bare `Uint8Array`. Since TypeScript 5.7 a bare `Uint8Array` could be backed by a `SharedArrayBuffer`, which `Blob` and some other DOM APIs refuse. Decoded bytes are always backed by an ordinary `ArrayBuffer`. JSON payloads take an interface: `events.on<{ id: number }>("comment_added", (c) => c.id)`.
+Or describe the stream once with an event map. TypeScript then infers each handler's payload, rejects names the map doesn't list, and narrows `onEvent`'s event by `eventName`:
+
+```ts
+type ChatEvents = {
+  chat_message: { author: string; text: string }
+  poof: Uint8Array<ArrayBuffer>
+}
+
+createSossegoStream<ChatEvents>({
+  url,
+  events: {
+    chat_message: (message) => append(message.author, message.text),
+    poof: (bytes) => show(bytes),
+  },
+  onEvent: (event) => {
+    if (event.eventName === "poof") console.log(event.payload.byteLength)
+  },
+})
+```
+
+`useSossegoStream<ChatEvents>(...)` takes the same map. The map is your word for it: nothing checks that the server publishes `poof` as bytes.
+
+Use `Uint8Array<ArrayBuffer>`, not a bare `Uint8Array`. Since TypeScript 5.7 a bare `Uint8Array` could be backed by a `SharedArrayBuffer`, which `Blob` and some other DOM APIs refuse. Decoded bytes are always backed by an ordinary `ArrayBuffer`.
 
 ### Async handlers
 
@@ -475,13 +500,18 @@ Sossego decodes events one at a time and calls their handlers in order. It doesn
 - **Work after an `await` runs alongside later events.** If that work must also keep the order, because each event depends on the one before, put it on a queue of your own. `createQueue` is the one Sossego uses itself:
 
 ```js
-import { createDispatcher, createQueue } from "@sossego/client"
+import { createSossegoStream, createQueue } from "@sossego/client"
 
 const inOrder = createQueue(1)           // one at a time; createQueue(4) allows four at once
-events.on("row_added", (row) => inOrder.push(async () => {
-  const html = await fetch(`/rows/${row.id}`).then((r) => r.text())
-  table.insertAdjacentHTML("beforeend", html)
-}))
+createSossegoStream({
+  url,
+  events: {
+    row_added: (row) => inOrder.push(async () => {
+      const html = await fetch(`/rows/${row.id}`).then((r) => r.text())
+      table.insertAdjacentHTML("beforeend", html)
+    }),
+  },
+})
 ```
 
 - **Errors don't stop the stream.** A handler that throws, or returns a promise that rejects, goes to `onError` (the Stimulus controller logs it).
@@ -489,7 +519,6 @@ events.on("row_added", (row) => inOrder.push(async () => {
 
 ### Open questions
 
-- **Types aren't tied to event names.** The payload annotation is your word for it: nothing checks that the server publishes `poof` as bytes. An event map would let TypeScript check and infer it: `createDispatcher<{ poof: Uint8Array<ArrayBuffer>; progress: string }>()`.
 - **The Stimulus registry is global.** It holds one handler per name for every `sossego` controller on the page; for per-element behaviour, use `sossego:event`. Dispatching a DOM event per name as well (`sossego:poof`) would allow `data-action="sossego:poof->gallery#show"`.
 
 ## Using with React
@@ -501,14 +530,14 @@ function Inbox({ stream }) {
   const { status } = useSossegoStream({
     url: stream.url,
     lastEventId: stream.cursor,
-    onEvent: (event) => console.log(event.eventName, event.payload),
+    events: { email_added: (email) => addEmail(email) },
     onGap: () => refetch(),
   })
   return <p>{status === "open" ? "Live" : "Connecting..."}</p>
 }
 ```
 
-The hook opens the stream on mount and closes it on unmount. It reopens when `url` or `enabled` change. The callbacks can change on every render without reconnecting. `enabled: false` pauses the stream without unmounting.
+The hook opens the stream on mount and closes it on unmount. It reopens when `url` or `enabled` change. `events` and the callbacks can change on every render without reconnecting. `enabled: false` pauses the stream without unmounting.
 
 ### The pattern: render at a cursor, refetch when behind
 
@@ -531,7 +560,7 @@ InertiaCable sends a signal over ActionCable when a model commits, and the clien
 | `broadcasts_to :chat` | `after_commit { Sossego::Stream.for(chat, :messages).publish("changed") }` |
 | `inertia_cable_stream(chat)` (a signed token) | `{url: helpers.sossego_signed_stream_path(stream), cursor: stream.head.to_s}`, a signed URL |
 | `useInertiaCable(cable_stream, { only, debounce })` | `useSossegoReload(stream, { only, debounce })`, below |
-| `broadcast_message_to(chat, data)` (direct messages) | `stream.publish("message_name", data)`, handled in `onEvent` |
+| `broadcast_message_to(chat, data)` (direct messages) | `stream.publish("message_name", data)`, handled in `events` |
 | `connected` | `status === "open"` |
 | server-side debounce | Not needed: the client debounces, and missed events aren't lost |
 
@@ -583,7 +612,8 @@ export function useSossegoReload(stream, { only, debounce = 100, onMessage } = {
     url: stream?.url ?? "",
     enabled: Boolean(stream),
     lastEventId: stream?.cursor,
-    onEvent: (event) => (event.eventName === "changed" ? reload() : onMessage?.(event)),
+    events: { changed: reload },
+    onEvent: (event) => event.eventName !== "changed" && onMessage?.(event),
     onGap: reload,
   })
 }

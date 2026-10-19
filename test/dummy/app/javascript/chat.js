@@ -1,5 +1,5 @@
 // The plain JS client, with no framework.
-import { createSossegoStream, createDispatcher, maxCursor } from "@sossego/client"
+import { createSossegoStream, maxCursor } from "@sossego/client"
 
 const root = document.getElementById("chat")
 const $ = (selector) => root.querySelector(selector)
@@ -10,27 +10,27 @@ const notice = (text) => {
   $("[data-notice]").textContent = text
 }
 
-const events = createDispatcher()
-events.on("chat_message", (message, event) => {
-  const li = document.createElement("li")
-  const author = document.createElement("b")
-  author.textContent = message.author
-  const sseq = document.createElement("small")
-  sseq.textContent = `#${event.sseq}`
-  li.append(author, " ", message.text, " ", sseq)
-  $("[data-messages]").append(li)
-  li.scrollIntoView({ block: "nearest" })
-})
-
 const stream = createSossegoStream({
   url: root.dataset.streamUrl,
   // Resume from what the page rendered: nothing is missed, nothing doubled.
   lastEventId: root.dataset.head,
+  events: {
+    chat_message: (message, event) => {
+      const li = document.createElement("li")
+      const author = document.createElement("b")
+      author.textContent = message.author
+      const sseq = document.createElement("small")
+      sseq.textContent = `#${event.sseq}`
+      li.append(author, " ", message.text, " ", sseq)
+      $("[data-messages]").append(li)
+      li.scrollIntoView({ block: "nearest" })
+    },
+  },
+  // Every event, whatever its name, before its handler above.
   onEvent: (event) => {
     knownHead = maxCursor(knownHead, event.head)
     $("[data-cursor]").textContent = event.seq
     $("[data-head]").textContent = knownHead
-    return events.dispatch(event)
   },
   onGap: (_event, expectedSseq) => notice(`Missed events from #${expectedSseq} (pruned, or more than the backlog). A real page would refetch here.`),
   onPing: ({ head, time }) => {

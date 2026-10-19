@@ -1,3 +1,5 @@
-import type { SossegoStreamOptions, SossegoStreamState } from "@sossego/client"
+import type { SossegoEventMap, SossegoStreamOptions, SossegoStreamState } from "@sossego/client"
 
-export function useSossegoStream<T = any>(opts: SossegoStreamOptions<T> & { enabled?: boolean }): SossegoStreamState
+export function useSossegoStream<M extends SossegoEventMap = SossegoEventMap>(
+  opts: SossegoStreamOptions<M> & { enabled?: boolean },
+): SossegoStreamState

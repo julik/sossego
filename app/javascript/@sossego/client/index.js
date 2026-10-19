@@ -12,18 +12,23 @@
  *   const stream = createSossegoStream({
  *     url: "/inbox_stream?account=42",
  *     lastEventId: "118",                       // first connect sends last_event_id=118
- *     onEvent: ({ eventName, seq, sseq, payload }) => console.log(eventName, seq, sseq, payload),
+ *     onEvent: ({ eventName, seq, sseq, payload }) => console.log(eventName, seq, sseq, payload),  // every event
  *     onGap: (event, expectedSseq) => refetchEverything(),
  *     onPing: (ping) => console.log("head is", ping.head),
  *     onClose: (reason, seq) => console.log(reason, seq),  // "over_budget", null
  *   })
  *   stream.close()
  *
- * @example Route events by name
- *   import { createSossegoStream, createDispatcher } from "@sossego/client"
- *   const events = createDispatcher()
- *   events.on("inbox_changed", () => refresh())
- *   createSossegoStream({ url, onEvent: events.dispatch })
+ * @example Handle events by name
+ *   import { createSossegoStream } from "@sossego/client"
+ *
+ *   createSossegoStream({
+ *     url,
+ *     events: {
+ *       inbox_changed: () => refresh(),
+ *       email_added: (email, event) => emailStore.add(email),
+ *     },
+ *   })
  */
 
 // ---------------------------------------------------------------------------
@@ -212,43 +217,6 @@ export function createQueue(maxConcurrent) {
 }
 
 // ---------------------------------------------------------------------------
-// Dispatcher
-// ---------------------------------------------------------------------------
-
-/**
- * Routes events by name to one handler each. Pass `dispatch` to
- * `createSossegoStream`'s `onEvent`. The handler receives the decoded
- * payload and the whole event. An event name with no handler is ignored;
- * logging it is the application's call.
- *
- * @example
- *   const events = createDispatcher()
- *   events.on("email_added", (body) => emailStore.add(body))
- *   createSossegoStream({ url, onEvent: events.dispatch })
- */
-export function createDispatcher() {
-  /** @type {Record<string, (payload: any, event: SossegoEvent) => void | Promise<void>>} */
-  const handlers = {}
-  return {
-    /**
-     * @param {string} eventName
-     * @param {(payload: any, event: SossegoEvent) => void | Promise<void>} handle
-     */
-    on(eventName, handle) {
-      handlers[eventName] = handle
-    },
-    /** @param {string} eventName */
-    off(eventName) {
-      delete handlers[eventName]
-    },
-    /** @param {SossegoEvent} event */
-    dispatch(event) {
-      return handlers[event.eventName]?.(event.payload, event)
-    },
-  }
-}
-
-// ---------------------------------------------------------------------------
 // The stream
 // ---------------------------------------------------------------------------
 
@@ -274,9 +242,11 @@ export function createDispatcher() {
  * @property {string} url
  * @property {string | null} [lastEventId] cursor for the first connect, sent
  *   as `last_event_id`. Without it the server decides where to start.
- * @property {(event: SossegoEvent) => void | Promise<void>} onEvent called
- *   for each event, in wire order. A returned promise is not waited for; if it
- *   rejects, the error goes to `onError`.
+ * @property {Record<string, (payload: any, event: SossegoEvent) => unknown>} [events]
+ *   handlers by event name, each given the decoded payload and the whole
+ *   event. An event with no handler here is ignored.
+ * @property {(event: SossegoEvent) => unknown} [onEvent] called
+ *   for every event, before its handler in `events`.
  * @property {(event: SossegoEvent, expectedSseq: number) => void} [onGap]
  *   called before an event whose `sseq` is not the previous one plus one:
  *   events were pruned or skipped, or the stream was reset. The first event
@@ -319,10 +289,11 @@ const ES_CLOSED = 2
  *
  * Exactly three SSE names are listened to: `sossego`, `ping` and `close`.
  * `sossego` and `close` frames go through a sequential queue that decodes
- * them one at a time and calls `onEvent` in wire order, even when a payload
- * decoder is async (gzip); a `close` is handled after every event received
- * before it. `onEvent` is called, not waited for: a handler that returns a
- * promise runs on alongside the next events. To serialize your own async
+ * them one at a time and calls the handlers (`onEvent`, then the one in
+ * `events`) in wire order, even when a payload decoder is async (gzip); a
+ * `close` is handled after every event received before it. Handlers are
+ * called, not waited for: one that returns a promise runs on alongside the
+ * next events, and its rejection goes to `onError`. To serialize your own async
  * work, put it on a queue of your own (`createQueue(1)`). Pings reset the stall timer
  * on arrival and bypass the queue. A connection error keeps that order too,
  * so the end of a response that a `close` frame ended is never reported.
@@ -366,6 +337,24 @@ export function createSossegoStream(opts) {
   const queue = createQueue(1)
 
   const setState = (state) => opts.onStateChange?.(state)
+
+  // Called in wire order, but not waited for: what a handler does after it
+  // returns is its own business. Its rejection still lands in onError.
+  const callHandler = (handler, ...args) => {
+    try {
+      const result = handler(...args)
+      if (typeof result?.then === "function") result.then(undefined, handleErr)
+    } catch (err) {
+      handleErr(err)
+    }
+  }
+
+  // `opts.events` is read for each event, so its handlers can change. Own
+  // properties only: an event named `constructor` is not Object's.
+  const handlerFor = (eventName) => {
+    const events = opts.events
+    return events && Object.hasOwn(events, eventName) ? events[eventName] : undefined
+  }
 
   const handleErr = (e) => {
     opts.onError?.(e instanceof Error || e instanceof Event ? e : new Error(String(e)))
@@ -423,17 +412,12 @@ export function createSossegoStream(opts) {
       setState({ status: "open", lastEventId })
 
       const event = { id, eventName: frame.evt, seq, sseq, head, streamId: sid, payload: frame.pld }
-      try {
-        if (lastSseq !== null && sseq !== lastSseq + 1) opts.onGap?.(event, lastSseq + 1)
-        lastSseq = sseq
-        // Called in wire order, but not waited for: what the handler does
-        // after it returns is its own business. Its rejection still lands
-        // in onError.
-        const result = opts.onEvent(event)
-        if (typeof result?.then === "function") result.then(undefined, handleErr)
-      } catch (err) {
-        handleErr(err)
-      }
+      const expectedSseq = lastSseq === null ? sseq : lastSseq + 1
+      lastSseq = sseq
+      if (sseq !== expectedSseq && opts.onGap) callHandler(opts.onGap, event, expectedSseq)
+      if (opts.onEvent) callHandler(opts.onEvent, event)
+      const handler = handlerFor(event.eventName)
+      if (handler) callHandler(handler, event.payload, event)
     }, raw)
   }
 

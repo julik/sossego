@@ -253,7 +253,7 @@ Moneymaker's redirect flows (`InvoicePrefillJob`, `TransactionClassifyJob`) shou
 
 ### E5. Dispatcher
 - **Cora:** a module-global registry, `on`/`dispatch`/`_resetForTesting`; the handler gets the payload.
-- **Gem:** `createDispatcher()` returns `{on, off, dispatch}`. Handlers get `(payload, event)`. There is no global registry, so two streams on a page do not share handlers.
+- **Gem:** handlers go to the stream itself, as `createSossegoStream({ events: { name: (payload, event) => … } })`; `onEvent` sees every event. There is no global registry, so two streams on a page do not share handlers. (An earlier `createDispatcher()` was folded into the stream.)
 - Cora would need a two-line change if it adopted the gem's client.
 
 ### E6. Not ported from Cora's app layer (`inboxStreamConnection.ts`)
@@ -303,6 +303,6 @@ These are generic enough for the library but not yet in it:
 ### Cora
 1. The table is already the gem's shape. Keep it.
 2. Delete `lib/sossego*` and `app/jobs/sossego/prune_job.rb`. `ClientPush::EventsController` keeps working as a subclass. Its `request.session_options[:skip]` line is now redundant, and harmless.
-3. If it adopts the gem's client: imports change from `@/lib/sossego/*` to `@sossego/client` and `@sossego/testing`, and `on`/`dispatch` change to `createDispatcher()`. Gap detection could move from `inboxStreamConnection.ts` to `onGap`.
+3. If it adopts the gem's client: imports change from `@/lib/sossego/*` to `@sossego/client` and `@sossego/testing`, and `on`/`dispatch` change to the stream's `events` option. Gap detection could move from `inboxStreamConnection.ts` to `onGap`.
 4. `Sossego::PruneJob` no longer sets `queue_as :low`. Set it in an initializer if the queue matters.
 5. Payload formats (A3): run `bin/rails g sossego:install --skip` for the `fmt` column. No Cora caller publishes a String today. Verbatim strings stored by Cora's old code still go out as `text`.
