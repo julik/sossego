@@ -192,7 +192,7 @@ class SossegoTest < ActiveSupport::TestCase
   test "STREAMING_HEADERS contains the anti-buffering set" do
     h = Sossego::STREAMING_HEADERS
     assert_equal "text/event-stream", h["Content-Type"]
-    assert_equal "no-cache, no-store, must-revalidate", h["Cache-Control"]
+    assert_equal "no-cache, no-transform", h["Cache-Control"]
     assert_equal "keep-alive", h["Connection"]
     assert_equal "identity", h["Content-Encoding"]
     assert_equal "no", h["X-Accel-Buffering"]

@@ -97,10 +97,13 @@ module Sossego
   # Each entry is load-bearing:
   #
   # - `Content-Type` - required by EventSource
-  # - `Cache-Control` - keeps caches and proxies from holding the response
+  # - `Cache-Control` - keeps caches and proxies from holding the response.
+  #   `no-transform` is what makes Rack::Deflater and compressing proxies
+  #   leave the stream be. There is no `no-store`: Rails rewrites a
+  #   Cache-Control with `no-store` in it to just `no-store`, dropping the rest
   # - `Connection` - keeps TCP open
-  # - `Content-Encoding: identity` - blocks Rack::Deflater from buffering
-  #   the entire response to compress it (would break streaming)
+  # - `Content-Encoding: identity` - some proxies may honour it, but
+  #   Rack::Deflater does not and gzips the response just the same
   # - `X-Accel-Buffering: no` - disables nginx and GCP HTTPS load balancer
   #   upstream buffering (without this, edges buffer ~32KB before flushing)
   #
@@ -108,7 +111,7 @@ module Sossego
   # defeat Rack::ETag's "I'll buffer to compute the etag" behavior.
   STREAMING_HEADERS = {
     "Content-Type" => "text/event-stream",
-    "Cache-Control" => "no-cache, no-store, must-revalidate",
+    "Cache-Control" => "no-cache, no-transform",
     "Connection" => "keep-alive",
     "Content-Encoding" => "identity",
     "X-Accel-Buffering" => "no"
