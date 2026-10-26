@@ -66,13 +66,33 @@ class Sossego::StreamsControllerTest < ActionController::TestCase
     assert_equal "keep-alive", response.headers["Connection"]
     assert_equal "identity", response.headers["Content-Encoding"]
     assert_equal "no", response.headers["X-Accel-Buffering"]
-    # Rails normalizes Cache-Control but we still get a non-cacheable response.
-    assert_includes response.headers["Cache-Control"].to_s, "no-store"
+    assert_equal "no-cache, no-transform", response.headers["Cache-Control"] # as Rails sends it, after normalizing
   end
 
   test "sets Last-Modified to defeat Rack::ETag buffering" do
     get :show
     assert_match(/GMT\z/, response.headers["Last-Modified"])
+  end
+
+  test "Rack::Deflater lets the stream through uncompressed, a chunk at a time" do
+    stream = Sossego::Stream.new("test:1:deflate")
+    first = stream.publish("entity", {id: 7})
+    second = stream.publish("entity", {id: 8})
+    TestStreamsController.next_stream = stream
+
+    app = Rack::Deflater.new(TestStreamsController.action(:show)) # the whole Rails response, Cache-Control rewriting included
+    _status, headers, body = app.call(Rack::MockRequest.env_for("/sossego_stream", "HTTP_ACCEPT_ENCODING" => "gzip"))
+
+    assert_equal "identity", headers["content-encoding"]
+    chunks = []
+    body.each do |c|
+      chunks << c
+      break if chunks.length >= 3
+    end
+    body.close
+    assert_match(/\Aretry: \d+\n\n\z/, chunks[0])
+    assert chunks[1].start_with?("event: sossego\nid: #{first.id}\n")
+    assert chunks[2].start_with?("event: sossego\nid: #{second.id}\n")
   end
 
   test "assigns a Sossego::StreamingBody as the response body" do
