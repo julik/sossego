@@ -10,3 +10,7 @@ gem "propshaft"
 gem "importmap-rails"
 gem "turbo-rails"
 gem "stimulus-rails"
+
+# The test for the engine exposing the packages to assiette. From Git until
+# a release has AssetHandler#expose.
+gem "assiette", github: "julik/assiette", group: :test

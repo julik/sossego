@@ -57,7 +57,7 @@
  * slow LLM request, say.
  */
 import { Controller } from "@hotwired/stimulus"
-import { createSossegoStream } from "@julik/sossego-client"
+import { createSossegoStream } from "@julik/sossego-client/index.js"
 
 // For a value inside a double-quoted attribute selector.
 const quoted = (value) => String(value).replace(/["\\]/g, "\\$&")

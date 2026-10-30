@@ -1,11 +1,10 @@
 # frozen_string_literal: true
 
-# Releasing: the gem and the five npm packages go out together, at one
-# version. See RELEASING.md.
+# Releasing: the gem, with its JS packages inside it, all at one version.
+# See RELEASING.md.
 
 require "json"
 require "net/http"
-require "tmpdir"
 require_relative "../lib/sossego/version"
 require_relative "../lib/sossego/javascript"
 
@@ -43,17 +42,13 @@ module Release
 
   def sh_out(command) = `#{command}`.strip
 
-  def published_on_npm?(name, at_version)
-    sh_out("npm view #{name}@#{at_version} version 2>/dev/null") == at_version
-  end
-
   def published_on_rubygems?(at_version)
     response = Net::HTTP.get_response(URI("https://rubygems.org/api/v1/versions/sossego.json"))
     response.is_a?(Net::HTTPSuccess) && JSON.parse(response.body).any? { |v| v["number"] == at_version }
   end
 end
 
-desc "Set the version of the gem and the npm packages, and date its CHANGELOG section, e.g. rake version[0.2.0]"
+desc "Set the version of the gem and its JS packages, and date its CHANGELOG section, e.g. rake version[0.2.0]"
 task :version, [:to] do |_, args|
   to = args.fetch(:to) { abort "Give the version: rake version[0.2.0]" }
   abort "#{to} is not a version" unless to.match?(/\A\d+\.\d+\.\d+(\.[a-z0-9.]+)?\z/)
@@ -118,61 +113,15 @@ namespace :release do
       sh "gem push pkg/sossego-#{version}.gem"
     end
   end
-
-  desc "Publish the npm packages from here (CI does this from the tag). DRY_RUN=1 to only show what would go out"
-  task :npm do
-    version = Release.version
-    dry_run = ENV["DRY_RUN"] == "1"
-    js = Release.javascript
-    license = File.join(Release::ROOT, "LICENSE.md")
-
-    Dir.mktmpdir("sossego-npm") do |staging|
-      js.copy_to(staging)
-      # The client first: the others ask for it as a peer at this version.
-      names = js.package_names.partition { |name| name == Release::CLIENT }.flatten
-      names.each do |name|
-        if !dry_run && Release.published_on_npm?(name, version)
-          puts "#{name}@#{version} is on npm already"
-          next
-        end
-
-        dir = File.join(staging, name)
-        manifest = js.manifests.fetch(name)
-        FileUtils.cp(license, dir)
-        File.write(File.join(dir, "README.md"), <<~MD)
-          # #{name}
-
-          #{manifest.fetch("description")}
-
-          Part of [Sossego](https://github.com/julik/sossego), which ships these packages in its gem too.
-          The [README](https://github.com/julik/sossego#readme) and the [MANUAL](https://github.com/julik/sossego/blob/main/MANUAL.md) explain how to use them.
-        MD
-
-        flags = ["--access public"]
-        flags << "--dry-run" if dry_run
-        flags << "--provenance" if ENV["GITHUB_ACTIONS"] == "true"
-        sh "npm publish #{flags.join(" ")}", chdir: dir
-      end
-    end
-  end
 end
 
-# Bundler's `release` would push the gem alone. This one tags, and the tag
-# makes CI publish the gem and the npm packages together.
+# Bundler's `release` would push the gem from here. This one tags, and the
+# tag makes CI test and publish it.
 Rake::Task["release"].clear
-desc "Tag the current version and push the tag: CI tests it, then publishes the gem and the npm packages"
-task release: %w[release:guard release:versions default test_js release:npm_dry_run] do
+desc "Tag the current version and push the tag: CI tests it, then publishes the gem"
+task release: %w[release:guard release:versions default test_js] do
   version = Release.version
   sh "git tag -a v#{version} -m 'Version #{version}'"
   sh "git push origin v#{version}"
   puts "Pushed v#{version}. Follow the release at https://github.com/julik/sossego/actions"
-end
-
-namespace :release do
-  task :npm_dry_run do
-    ENV["DRY_RUN"] = "1"
-    Rake::Task["release:npm"].invoke
-  ensure
-    ENV.delete("DRY_RUN")
-  end
 end

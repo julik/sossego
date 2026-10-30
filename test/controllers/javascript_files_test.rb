@@ -50,7 +50,7 @@ class Sossego::JavaScriptFilesTest < ActionDispatch::IntegrationTest
   test "gives an importmap fragment with the page modules and their integrity" do
     map = helpers.sossego_importmap
 
-    assert_equal %w[@julik/sossego-client @julik/sossego-highlight @julik/sossego-stimulus], map[:imports].keys.sort
+    assert_equal %w[@julik/sossego-client @julik/sossego-client/index.js @julik/sossego-highlight @julik/sossego-highlight/index.js @julik/sossego-stimulus @julik/sossego-stimulus/index.js], map[:imports].keys.sort
     map[:imports].each_value do |url|
       assert_match(/\Asha384-/, map[:integrity].fetch(url))
       get url
@@ -63,11 +63,27 @@ class Sossego::JavaScriptFilesTest < ActionDispatch::IntegrationTest
     map = helpers.sossego_importmap(also: %w[@julik/sossego-react])
 
     assert_includes map[:imports].keys, "@julik/sossego-react"
+    assert_includes map[:imports].keys, "@julik/sossego-react/index.js"
     assert map[:integrity].key?(map[:imports]["@julik/sossego-react"])
     refute_includes helpers.sossego_importmap[:imports].keys, "@julik/sossego-testing"
   end
 
   test "names an unknown specifier instead of mapping it" do
     assert_raises(KeyError) { helpers.sossego_importmap(also: %w[@julik/sossego-nope]) }
+  end
+end
+
+class Sossego::ImportmapPinsTest < ActiveSupport::TestCase
+  test "importmap-rails pins both names of every page package, preloads all but react, and never maps the testing package" do
+    resolver = ActionController::Base.helpers
+    imports = JSON.parse(Rails.application.importmap.to_json(resolver: resolver)).fetch("imports")
+    preloaded = Rails.application.importmap.preloaded_module_paths(resolver: resolver)
+
+    %w[client stimulus highlight react].each do |part|
+      assert_equal imports.fetch("@julik/sossego-#{part}"), imports.fetch("@julik/sossego-#{part}/index.js")
+    end
+    refute imports.keys.any? { |specifier| specifier.start_with?("@julik/sossego-testing") }
+    assert_includes preloaded, imports.fetch("@julik/sossego-stimulus")
+    refute_includes preloaded, imports.fetch("@julik/sossego-react")
   end
 end

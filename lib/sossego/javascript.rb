@@ -5,15 +5,21 @@ require "fileutils"
 require "pathname"
 
 module Sossego
-  # The JS client: the npm packages under `app/javascript/@julik/`, one
+  # The JS client: npm-shaped packages under `app/javascript/@julik/`, one
   # directory and package.json each (`@julik/sossego-client`,
-  # `@julik/sossego-stimulus`, ...). Paths are relative to `app/javascript`, so a file's path is also its
-  # place in an importmap, a copy, or node_modules.
+  # `@julik/sossego-stimulus`, ...). They are not on npm: a host app gets them
+  # from the gem. Paths are relative to `app/javascript`, so a file's path is
+  # also its place in an importmap, a copy, an assiette handle or node_modules.
+  #
+  # The add-ons import the client by file, `@julik/sossego-client/index.js`,
+  # never by package name alone: assiette rewrites only an import that names a
+  # file, and every setup below resolves the file form too.
   #
   # It serves the files at digested URLs for apps that write their own
   # importmap ({#call}, {ImportmapHelper}), copies the packages into a host app
-  # for `link:` dependencies ({#copy_to}), and tells whether such a copy still
-  # matches the gem ({#stale_files}).
+  # ({#copy_to}: `link:` dependencies, or a directory assiette serves), and
+  # tells whether such a copy still matches the gem ({#stale_files}). The
+  # engine exposes the packages to assiette as `@julik` ({Engine}).
   class JavaScript
     SCOPE = "@julik"
     # Every package of the gem is named `@julik/sossego-<part>`: the scope is
@@ -40,7 +46,7 @@ module Sossego
     # @return [Array<String>] e.g. ["@julik/sossego-client", "@julik/sossego-highlight", ...]
     def package_names = manifests.keys
 
-    def version(package_name = "#{SCOPE}/client") = manifests.fetch(package_name).fetch("version")
+    def version(package_name = "#{SCOPE}/#{PREFIX}client") = manifests.fetch(package_name).fetch("version")
 
     # @return [Hash{String => String}] bare specifier => file, e.g.
     #   "@julik/sossego-stimulus" => "@julik/sossego-stimulus/index.js",
@@ -91,12 +97,15 @@ module Sossego
     end
 
     # Replaces the `@julik/sossego-*` directories in `dir` with a copy of the
-    # packages, so one the gem no longer ships goes too. Anything else in
-    # `dir`, other `@julik` packages included, is left alone.
-    def copy_to(dir)
+    # packages, so one the gem no longer ships, or one no longer wanted, goes
+    # too. Anything else in `dir`, other `@julik` packages included, is left
+    # alone.
+    #
+    # @param package_names [Array<String>] only these packages
+    def copy_to(dir, package_names = self.package_names)
       dir = Pathname(dir)
       package_dirs(dir).each { |package_dir| FileUtils.rm_rf(package_dir) }
-      files.each do |relpath|
+      files(package_names).each do |relpath|
         FileUtils.mkdir_p(dir.join(relpath).dirname)
         FileUtils.cp(root.join(relpath), dir.join(relpath))
       end

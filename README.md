@@ -53,15 +53,16 @@ sossego_prune:
   schedule: every hour
 ```
 
-With importmap-rails the JavaScript is already pinned: `@julik/sossego-client`, `@julik/sossego-stimulus`, `@julik/sossego-highlight`. Register the Stimulus controller:
+The JavaScript ships inside the gem, as packages under `app/javascript/@julik/`. With importmap-rails it is already pinned, and with [assiette](https://github.com/julik/assiette) the engine exposes it as `@julik`. Register the Stimulus controller:
 
 ```js
 // app/javascript/controllers/index.js
-import SossegoController from "@julik/sossego-stimulus"
+import SossegoController from "@julik/sossego-stimulus"            // importmap-rails
+import SossegoController from "@julik/sossego-stimulus/index.js"   // assiette
 application.register("sossego", SossegoController)
 ```
 
-Not on importmap-rails? See [Getting the JavaScript into your app](MANUAL.md#getting-the-javascript-into-your-app).
+A bundler, or a copy of the packages in your own tree: `bin/rails sossego:js:vendor`. See [Getting the JavaScript into your app](MANUAL.md#getting-the-javascript-into-your-app).
 
 ## Live updates with Turbo Streams
 

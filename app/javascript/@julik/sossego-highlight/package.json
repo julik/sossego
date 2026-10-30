@@ -9,6 +9,10 @@
       "types": "./index.d.ts",
       "default": "./index.js"
     },
+    "./index.js": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
     "./highlight.css": "./highlight.css"
   },
   "files": [
@@ -25,8 +29,5 @@
     "directory": "app/javascript/@julik/sossego-highlight"
   },
   "homepage": "https://github.com/julik/sossego#readme",
-  "bugs": "https://github.com/julik/sossego/issues",
-  "publishConfig": {
-    "access": "public"
-  }
+  "bugs": "https://github.com/julik/sossego/issues"
 }

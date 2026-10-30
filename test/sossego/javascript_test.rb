@@ -32,11 +32,22 @@ class Sossego::JavaScriptTest < ActiveSupport::TestCase
     @js.files.each { |relpath| assert_includes gem_files, "app/javascript/#{relpath}" }
   end
 
-  test "the add-ons import the client by its package name, never by a relative path" do
-    @js.modules.each_value do |relpath|
+  test "every package exports its index.js by file as well as by package name" do
+    @js.package_names.each do |name|
+      assert_equal "#{name}/index.js", @js.modules.fetch(name), name
+      assert_equal "#{name}/index.js", @js.modules.fetch("#{name}/index.js"), name
+    end
+  end
+
+  test "the add-ons import the client by file, never by package name alone or by a relative path" do
+    @js.modules.values.uniq.each do |relpath|
       next unless relpath.end_with?(".js")
       source = @js.root.join(relpath).read
       refute_match(/from\s+["']\.\.?\//, source, "#{relpath} imports by relative path, which 404s under digested asset URLs")
+      source.scan(/^import .* from "(@julik\/[^"]+)"/).flatten.each do |specifier|
+        assert_includes @js.modules.keys, specifier, "#{relpath} imports #{specifier}, which is not an exported file"
+        assert specifier.end_with?(".js"), "#{relpath} imports #{specifier} by package name; assiette only rewrites an import that names a file"
+      end
     end
   end
 
@@ -72,6 +83,16 @@ class Sossego::JavaScriptTest < ActiveSupport::TestCase
       FileUtils.rm_rf(File.join(dir, "@julik/sossego-react"))
 
       assert_equal %w[@julik/sossego-client @julik/sossego-highlight @julik/sossego-stimulus @julik/sossego-testing], @js.present_in(dir)
+      assert_empty @js.stale_files(dir, @js.present_in(dir))
+    end
+  end
+
+  test "copies only the packages asked for, dropping the rest of an earlier copy" do
+    Dir.mktmpdir do |dir|
+      @js.copy_to(dir)
+      @js.copy_to(dir, %w[@julik/sossego-client @julik/sossego-stimulus])
+
+      assert_equal %w[@julik/sossego-client @julik/sossego-stimulus], @js.present_in(dir)
       assert_empty @js.stale_files(dir, @js.present_in(dir))
     end
   end

@@ -1,7 +1,7 @@
 {
   "name": "sossego-workspace",
   "private": true,
-  "description": "Development workspace for the @julik/sossego-* packages in app/javascript/@julik",
+  "description": "Development workspace for the @julik/sossego-* packages in app/javascript/@julik, which ship inside the gem",
   "workspaces": [
     "app/javascript/@julik/sossego-*"
   ],

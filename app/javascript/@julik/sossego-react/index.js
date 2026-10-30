@@ -8,7 +8,7 @@
  *   state.status // "connecting" | "open" | "reconnecting" | "closed"
  */
 import { useEffect, useRef, useState } from "react"
-import { createSossegoStream } from "@julik/sossego-client"
+import { createSossegoStream } from "@julik/sossego-client/index.js"
 
 const CLOSED = { status: "closed", lastEventId: null }
 

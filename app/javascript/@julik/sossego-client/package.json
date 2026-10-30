@@ -8,6 +8,10 @@
     ".": {
       "types": "./index.d.ts",
       "default": "./index.js"
+    },
+    "./index.js": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
     }
   },
   "files": [
@@ -20,8 +24,5 @@
     "directory": "app/javascript/@julik/sossego-client"
   },
   "homepage": "https://github.com/julik/sossego#readme",
-  "bugs": "https://github.com/julik/sossego/issues",
-  "publishConfig": {
-    "access": "public"
-  }
+  "bugs": "https://github.com/julik/sossego/issues"
 }

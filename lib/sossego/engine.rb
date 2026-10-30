@@ -19,6 +19,16 @@ module Sossego
       end
     end
 
+    # Assiette serves the packages as "@julik/sossego-<part>/index.js" and
+    # fingerprints the imports between them. Every Assiette::Server runs this
+    # on its handler; without assiette it never runs. Added next to whatever
+    # another gem exposed under "@julik", since the scope is shared.
+    initializer "sossego.assiette" do
+      ActiveSupport.on_load(:assiette) do
+        expose(JavaScript::SCOPE, Array(exposed[JavaScript::SCOPE]) | [Sossego.javascript.root.join(JavaScript::SCOPE)])
+      end
+    end
+
     initializer "sossego.helpers" do
       ActiveSupport.on_load(:action_controller_base) do
         helper Sossego::StreamsHelper

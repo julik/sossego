@@ -271,7 +271,7 @@ The failed hand-off is reported to `Rails.error` too, and so is a publish that f
 
 ## Getting the JavaScript into your app
 
-The client is five small npm packages under `app/javascript/@julik/` in the gem, published to npm as `@julik/sossego-*`. They are plain ES modules with `.d.ts` types and need no build step.
+The client is five small packages under `app/javascript/@julik/` in the gem. They are shaped like npm packages, with a `package.json`, an `exports` map and `.d.ts` types, but they are not on npm: your app takes them from the gem. They are plain ES modules and need no build step.
 
 | Package | |
 |---|---|
@@ -281,11 +281,29 @@ The client is five small npm packages under `app/javascript/@julik/` in the gem,
 | `@julik/sossego-react` | `useSossegoStream` |
 | `@julik/sossego-testing` | `FakeEventSource` and frame builders, for your tests |
 
-The add-ons import `@julik/sossego-client` by name, so every setup must resolve that name.
+Every package exports its module under two names, `@julik/sossego-stimulus` and `@julik/sossego-stimulus/index.js`. The add-ons import the client by file, `@julik/sossego-client/index.js`, so every setup below resolves that name. Pick the setup that matches how your app serves JavaScript.
 
-**importmap-rails** (with Propshaft or Sprockets). Nothing to do: the engine adds the files to the asset path and pins them. `@julik/sossego-react` is pinned but not preloaded; pin `react` yourself to use it. The stylesheet is `stylesheet_link_tag "@julik/sossego-highlight/highlight"`.
+**importmap-rails** (with Propshaft or Sprockets). Nothing to do: the engine adds the files to the asset path and pins both names of every package but `@julik/sossego-testing`. `@julik/sossego-react` is pinned but not preloaded; pin `react` yourself to use it. The stylesheet is `stylesheet_link_tag "@julik/sossego-highlight/highlight"`.
 
-**An importmap you write yourself** (assiette, hand-rolled). The engine serves the packages itself at `/sossego/js/<digest>/@julik/sossego-…`. The URLs change when the content does, so they can be cached forever. Merge its entries into your map:
+**assiette.** The engine exposes the gem's `@julik` directory on every handler an `Assiette::Server` is built with, through assiette's `:assiette` load hook. Nothing to configure. Import the packages by file. Assiette serves them at `/@julik/sossego-stimulus/index.js?s=…`, rewrites your import to that path, and rewrites the package's own import of the client the same way, so every module loads once and your fingerprints cover the gem's files:
+
+```js
+import SossegoController from "@julik/sossego-stimulus/index.js"
+```
+
+```erb
+<%= assiette_stylesheet_tag "@julik/sossego-highlight/highlight.css" %>
+```
+
+`@hotwired/stimulus` and `react` stay as written, for your import map. `assiette_modulepreload_tags` preloads all five packages, `@julik/sossego-react` included; on a page that maps no `react`, pass `exposed: []` to leave the exposed directories out, or vendor only the packages you use:
+
+```sh
+bin/rails sossego:js:vendor DIR=app/assets ONLY=client,stimulus,highlight
+```
+
+That copies them to `app/assets/@julik/`, under the same names. A file under your own root wins over the exposed one, so the copy is what gets served, preloaded like the rest of your modules, and reviewed in your diffs. Commit it, run the task again after each gem upgrade, and put `bin/rails sossego:js:check DIR=app/assets` in CI: it fails when the copy differs from the installed gem.
+
+**An importmap you write yourself** (hand-rolled, no assiette). The engine serves the packages itself at `/sossego/js/<digest>/@julik/sossego-…`. The URLs change when the content does, so they can be cached forever. Merge its entries into your map:
 
 ```ruby
 map = {imports: {...your pins...}, integrity: {...}}
@@ -297,23 +315,12 @@ tag.script(map.to_json.html_safe, type: "importmap")
 <link rel="stylesheet" href="<%= sossego_asset_path("@julik/sossego-highlight/highlight.css") %>">
 ```
 
-The entries come with SRI hashes. `@julik/sossego-testing` is never mapped.
+The entries come with SRI hashes and cover both names of every module. `@julik/sossego-testing` is never mapped.
 
-**A bundler with node_modules** (esbuild, Vite, webpack). Install the packages from npm, at exactly the gem's version:
-
-```json
-"dependencies": {
-  "@julik/sossego-client": "0.1.0",
-  "@julik/sossego-stimulus": "0.1.0"
-}
-```
-
-When you upgrade the gem, upgrade these to its version. `bin/rails sossego:js:check` fails when what's in `node_modules` differs from the installed gem, so put it in CI.
-
-**The same, from the gem instead of npm**, for a gem from Git or a path, which npm doesn't have yet. Copy the packages from the installed gem into your app, and link to the copies:
+**A bundler with node_modules** (esbuild, Vite, webpack). Copy the packages from the installed gem into your app, and link to the copies:
 
 ```sh
-bin/rails sossego:js:vendor     # copies to vendor/javascript/@julik/sossego-*/ (DIR= to change) and prints the lines below
+bin/rails sossego:js:vendor     # copies to vendor/javascript/@julik/sossego-*/ (DIR= to change, ONLY=client,stimulus for some) and prints the lines below
 ```
 
 ```json
@@ -323,7 +330,7 @@ bin/rails sossego:js:vendor     # copies to vendor/javascript/@julik/sossego-*/ 
 }
 ```
 
-Use `file:` instead of `link:` with npm. Commit `vendor/javascript/@julik`. After each gem upgrade, run the task again. `bin/rails sossego:js:check` fails when the copies, or what's in `node_modules`, differ from the installed gem, so put it in CI. The lockfile records only the relative path: the same on every machine and in Docker. [llm/outputs/js-packaging.md](llm/outputs/js-packaging.md) explains the choice: why not `file:` with yarn, why not a path into the gem's install directory.
+Use `file:` instead of `link:` with npm. Commit `vendor/javascript/@julik`. After each gem upgrade, run the task again. `bin/rails sossego:js:check` fails when the copies, or what's in `node_modules`, differ from the installed gem, so put it in CI. The lockfile records only the relative path: the same on every machine and in Docker. [llm/outputs/js-packaging.md](llm/outputs/js-packaging.md) explains the choice: why a copy and not a path into the gem's install directory, why not `file:` with yarn.
 
 ## The JavaScript client
 
