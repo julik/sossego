@@ -295,13 +295,15 @@ import SossegoController from "@julik/sossego-stimulus/index.js"
 <%= assiette_stylesheet_tag "@julik/sossego-highlight/highlight.css" %>
 ```
 
-`@hotwired/stimulus` and `react` stay as written, for your import map. `assiette_modulepreload_tags` preloads all five packages, `@julik/sossego-react` included; on a page that maps no `react`, pass `exposed: []` to leave the exposed directories out, or vendor only the packages you use:
+`@hotwired/stimulus` and `react` stay as written, for your import map. `assiette_modulepreload_tags` preloads, of the gem's packages, the ones your modules import and what those import in turn: with the controller above that is the Stimulus package and the client, not the React hook or the test helpers. The import is the selection. Only an `import()` whose specifier is computed at run time escapes that, and `assiette_modulepreload_tags(exposed: "@julik")` then preloads all five packages.
+
+To have the files in your own tree, reviewed in your diffs, copy the packages you use instead:
 
 ```sh
 bin/rails sossego:js:vendor DIR=app/assets ONLY=client,stimulus,highlight
 ```
 
-That copies them to `app/assets/@julik/`, under the same names. A file under your own root wins over the exposed one, so the copy is what gets served, preloaded like the rest of your modules, and reviewed in your diffs. Commit it, run the task again after each gem upgrade, and put `bin/rails sossego:js:check DIR=app/assets` in CI: it fails when the copy differs from the installed gem.
+That copies them to `app/assets/@julik/`, under the same names. A file under your own root wins over the exposed one, so the copy is what gets served. Commit it, run the task again after each gem upgrade, and put `bin/rails sossego:js:check DIR=app/assets` in CI: it fails when the copy differs from the installed gem.
 
 **An importmap you write yourself** (hand-rolled, no assiette). The engine serves the packages itself at `/sossego/js/<digest>/@julik/sossego-…`. The URLs change when the content does, so they can be cached forever. Merge its entries into your map:
 
