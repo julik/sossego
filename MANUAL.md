@@ -299,7 +299,7 @@ Every package exports its module under two names, `@julik/sossego-stimulus` and 
 
 **importmap-rails** (with Propshaft or Sprockets). Nothing to do: the engine adds the files to the asset path and pins both names of every package but `@julik/sossego-testing`. `@julik/sossego-react` is pinned but not preloaded; pin `react` yourself to use it. The stylesheet is `stylesheet_link_tag "@julik/sossego-highlight/highlight"`.
 
-**assiette.** The engine exposes the gem's `@julik` directory on every handler an `Assiette::Server` is built with, through assiette's `:assiette` load hook. Nothing to configure. Import the packages by file. Assiette serves them at `/@julik/sossego-stimulus/index.js?s=…`, rewrites your import to that path, and rewrites the package's own import of the client the same way, so every module loads once and your fingerprints cover the gem's files:
+**assiette** (0.7.0 or later). The engine exposes the gem's `@julik` directory on every handler an `Assiette::Server` is built with, through assiette's `:assiette` load hook. Nothing to configure. Import the packages by file. Assiette serves them at `/@julik/sossego-stimulus/index.js?s=…`, rewrites your import to that path, and rewrites the package's own import of the client the same way, so every module loads once and your fingerprints cover the gem's files:
 
 ```js
 import SossegoController from "@julik/sossego-stimulus/index.js"
