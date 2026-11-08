@@ -20,7 +20,8 @@ class Sossego::PayloadEncryptionTest < ActiveSupport::TestCase
     stored = stream.events_after(nil).last
     tuple = Sossego::Source::EventTuple.new(stored.id.to_s, stored.sseq, stored.event_name, *stored.wire_pld_and_fmt)
     frame = Sossego.format_event_frame(tuple, head: event.id.to_s, sid: stream.id)
-    assert_includes frame, '"pld":{"subject":"Payroll"}'
+    data = frame.lines.select { |line| line.start_with?("data: ") }.map { |line| line.delete_prefix("data: ").chomp }.join("\n")
+    assert_equal({"subject" => "Payroll"}, Sossego.decode_frame(data).fetch("pld"))
   end
 
   test "a row written before encryption is read as it was written" do
