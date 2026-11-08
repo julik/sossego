@@ -18,5 +18,11 @@ module Dummy
     config.root = File.expand_path("..", __dir__)
     config.eager_load = false
     config.active_job.queue_adapter = :async
+
+    # Payloads are encrypted at rest in config/initializers/sossego.rb, so the
+    # suite runs on encrypted rows. Fixed keys: this is the dummy app.
+    config.active_record.encryption.primary_key = "sossego-dummy-primary-key"
+    config.active_record.encryption.deterministic_key = "sossego-dummy-deterministic-key"
+    config.active_record.encryption.key_derivation_salt = "sossego-dummy-key-derivation-salt"
   end
 end

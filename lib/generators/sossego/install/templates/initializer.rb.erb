@@ -39,6 +39,15 @@ Sossego.retention = 24.hours
 # ApplicationController, as turbo-rails' broadcasts do.
 # Sossego.turbo_stream_renderer = -> { ApplicationController }
 
+# Encrypt payloads at rest with Active Record Encryption, for streams that
+# carry what the rest of your database encrypts too (a chat reply quoting
+# mail, a prefilled form). Needs the encryption keys in your credentials.
+# Rows written before this stay readable until Sossego::PruneJob drops them.
+# In to_prepare, so it survives a reload in development.
+# Rails.application.config.to_prepare do
+#   Sossego::Event.encrypts :payload, support_unencrypted_data: true
+# end
+
 # PostgreSQL only: how long a publish waits for its stream's lock before it
 # raises ActiveRecord::LockWaitTimeout. On SQLite the database's busy timeout
 # applies instead.

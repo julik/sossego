@@ -203,6 +203,20 @@ Sossego.around_poll = ->(poll) { Sossego.connection_class.connected_to(role: :re
 
 A UUID primary key works if ids are generated in commit order (PostgreSQL 18's `uuidv7()` as the column default). Override `Sossego::Event.cursor_valid?` to accept them.
 
+### Encrypting payloads at rest
+
+A payload sits in `sossego_events` until it is pruned, in the clear. When a stream carries what the rest of your database encrypts, a chat reply that quotes mail, a form prefill with a name in it, encrypt the column too. Sossego writes and reads every row through `Sossego::Event`, so Active Record Encryption is all it takes, and the wire never sees ciphertext:
+
+```ruby
+# config/initializers/sossego.rb
+Rails.application.config.to_prepare do
+  Sossego::Event.encrypts :payload, support_unencrypted_data: true
+end
+```
+
+It needs the [encryption keys](https://guides.rubyonrails.org/active_record_encryption.html#setup) in your credentials. `support_unencrypted_data` keeps the rows written before this readable; they are gone after one retention period anyway. `to_prepare` rather than a bare call, because `Sossego::Event` is reloaded in development. The read-only SQLite polling connection and `around_poll` both go through the model, so they decrypt like any other read.
+
+
 ## Background jobs
 
 Every `Sossego::Stream` has helpers for the events the Stimulus controller handles. Jobs, controllers and callbacks all publish through a stream:

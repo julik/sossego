@@ -181,7 +181,7 @@ data: }
 | `sseq` | bigint, not null | Dense among retained rows. Unique index on `(stream_id, sseq)` as a guard against a writer that bypassed the lock |
 | `event_name` | string, not null | App event name, or `close` when written by the transport API. Validation rejects every other reserved name, and `close` unless the transport API set it |
 | `fmt` | string, not null, default `ejson` | What `payload` holds, named as on the wire (section 5). Rows from before the column read as `ejson` |
-| `payload` | text, not null | The `pld` in wire form: JSON text for `ejson`, the text itself for `text`, base64 for `bytes` and every `gz:` format. Never queried into. An `ejson` row whose payload does not parse is sent as `text` |
+| `payload` | text, not null | The `pld` in wire form: JSON text for `ejson`, the text itself for `text`, base64 for `bytes` and every `gz:` format. Never queried into. An `ejson` row whose payload does not parse is sent as `text`. A host may encrypt it at rest (Active Record Encryption), since every row is written and read through the model; the wire form is what the model returns |
 | `created_at` | datetime, not null | Indexed. Retention only |
 
 Indexes: primary key; `(stream_id, id)` for the poll; `(stream_id, sseq)` unique; `created_at`. No `seq` column: the cursor is `id`. No `updated_at`.

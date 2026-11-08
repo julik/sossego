@@ -45,3 +45,10 @@ Sossego.retention = 24.hours
 # Rails.application.config.after_initialize do
 #   Sossego::Event.lock_timeout_ms = 1_000
 # end
+
+# Payloads encrypted at rest, as the generated initializer suggests. Every
+# test and demo then runs on encrypted rows; test/sossego/payload_encryption_test.rb
+# checks the column holds ciphertext and the wire does not.
+Rails.application.config.to_prepare do
+  Sossego::Event.encrypts :payload, support_unencrypted_data: true
+end
