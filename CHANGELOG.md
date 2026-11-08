@@ -1,5 +1,7 @@
 # Changelog
 
+## Unreleased
+
 ## 0.1.0
 
 - First release. Sossego as extracted from Moneymaker and Cora: the events table, the streaming body, signed streams, the job helpers, and the JavaScript client with its Stimulus, React and highlight add-ons.
