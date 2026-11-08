@@ -66,9 +66,13 @@ class Sossego::RactorTest < ActiveSupport::TestCase
     assert Sossego.encoders.frozen?
     assert_equal "x", Sossego.envelope(evt: "x", pld: "x", fmt: "local").fetch(:pld)
 
+    # The Ractor dies with the error we are after; keep its thread from printing it
+    report = Thread.report_on_exception
+    Thread.report_on_exception = false
     error = assert_raises(Ractor::RemoteError) { in_ractor { Sossego.format_close_frame(reason: "forbidden") } }
     assert_kind_of Ractor::IsolationError, error.cause
   ensure
+    Thread.report_on_exception = report unless report.nil?
     Sossego.unregister_fmt("local")
     assert Ractor.shareable?(Sossego.encoders)
   end

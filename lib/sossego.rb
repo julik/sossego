@@ -6,8 +6,6 @@ require "zlib"
 require "stringio"
 require "active_support"
 require "active_support/core_ext"
-require "rails/engine"
-require "action_dispatch"
 require "action_view"
 
 require_relative "sossego/version"
@@ -475,4 +473,6 @@ require_relative "sossego/turbo_stream"
 require_relative "sossego/publishing_helpers"
 require_relative "sossego/enqueuing"
 require_relative "sossego/javascript"
-require_relative "sossego/engine"
+# The engine, with the controllers, routes and models, only under Rails.
+# Without it this is the wire layer, the Rack body and its source.
+require_relative "sossego/engine" if defined?(Rails::Engine)
