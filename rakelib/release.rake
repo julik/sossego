@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
 # Releasing: the gem, with its JS packages inside it, all at one version.
-# See RELEASING.md.
+# Bundler's `rake release` builds, tags, pushes the tag and pushes the gem;
+# the version check below runs in front of it. See RELEASING.md.
 
 require "json"
-require "net/http"
 require_relative "../lib/sossego/version"
 require_relative "../lib/sossego/javascript"
 
@@ -39,13 +39,6 @@ module Release
   end
 
   def package_dirs = javascript.manifests.keys.map { |name| File.join(ROOT, "app/javascript", name) }
-
-  def sh_out(command) = `#{command}`.strip
-
-  def published_on_rubygems?(at_version)
-    response = Net::HTTP.get_response(URI("https://rubygems.org/api/v1/versions/sossego.json"))
-    response.is_a?(Net::HTTPSuccess) && JSON.parse(response.body).any? { |v| v["number"] == at_version }
-  end
 end
 
 desc "Set the version of the gem and its JS packages, and date its CHANGELOG section, e.g. rake version[0.2.0]"
@@ -89,39 +82,12 @@ namespace :release do
     puts "Everything is at #{version}"
   end
 
-  # The local guards: what Bundler's release checks too, and more
-  task :guard do
-    version = Release.version
-    abort "Commit or stash your changes first" unless Release.sh_out("git status --porcelain").empty?
-    abort "Release from main" unless Release.sh_out("git rev-parse --abbrev-ref HEAD") == "main"
-    sh "git fetch --quiet origin main"
-    abort "main is not the same as origin/main" unless Release.sh_out("git rev-parse HEAD") == Release.sh_out("git rev-parse origin/main")
-    abort "The tag v#{version} exists already" unless Release.sh_out("git tag --list v#{version}").empty?
-  end
-
   desc "Print the CHANGELOG section of the current version"
   task :notes do
     puts Release.notes(Release.version)
   end
 
-  desc "Push the gem to RubyGems from here (CI does this from the tag). Skips a version that is up already"
-  task gem: :build do
-    version = Release.version
-    if Release.published_on_rubygems?(version)
-      puts "sossego #{version} is on RubyGems already"
-    else
-      sh "gem push pkg/sossego-#{version}.gem"
-    end
-  end
-end
-
-# Bundler's `release` would push the gem from here. This one tags, and the
-# tag makes CI test and publish it.
-Rake::Task["release"].clear
-desc "Tag the current version and push the tag: CI tests it, then publishes the gem"
-task release: %w[release:guard release:versions default test_js] do
-  version = Release.version
-  sh "git tag -a v#{version} -m 'Version #{version}'"
-  sh "git push origin v#{version}"
-  puts "Pushed v#{version}. Follow the release at https://github.com/julik/sossego/actions"
+  # Bundler's release checks the tree is clean, then tags and pushes. Check
+  # the versions agree before the tag goes anywhere.
+  task guard_clean: :versions
 end

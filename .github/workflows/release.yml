@@ -1,8 +1,7 @@
 name: Release
 
-# `rake release` pushes a vX.Y.Z tag. This tests the tag, then pushes the gem
-# with trusted publishing: no token is stored. RELEASING.md has the one-time
-# setup.
+# `rake release` pushes a vX.Y.Z tag along with the gem. This runs CI on the
+# tag and makes the GitHub release from the CHANGELOG section.
 
 on:
   push:
@@ -27,24 +26,8 @@ jobs:
   ci:
     uses: ./.github/workflows/ci.yml
 
-  gem:
-    needs: [versions, ci]
-    runs-on: ubuntu-latest
-    environment: release
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "3.4"
-          bundler-cache: true
-      - uses: rubygems/configure-rubygems-credentials@v2.1.0
-      - run: bundle exec rake release:gem
-
   github-release:
-    needs: [gem]
+    needs: [versions, ci]
     runs-on: ubuntu-latest
     permissions:
       contents: write

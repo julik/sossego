@@ -10,20 +10,6 @@ bundle exec rake version[0.2.0]   # sets version.rb and every package.json, date
 bundle exec rake release
 ```
 
-`rake release` checks that the tree is clean, `main` matches `origin/main`, every version agrees and the CHANGELOG has the version's section. It runs the Ruby tests, standardrb and the JS tests. Then it tags `v0.2.0` and pushes the tag.
+`rake release` is Bundler's: it builds the gem, checks that the tree is clean, tags `v0.2.0`, pushes the commit and the tag, and pushes the gem to RubyGems. Before the tag it also checks that every version agrees and the CHANGELOG has the version's section. Pushing the gem asks for your RubyGems OTP, since the gem requires MFA.
 
-The tag starts [the release workflow](.github/workflows/release.yml):
-
-1. It checks that the tag matches the versions, and runs CI on the tag.
-2. It pushes the gem to RubyGems with trusted publishing: GitHub's OIDC token instead of a stored API key.
-3. It creates the GitHub release, with the CHANGELOG section as its notes.
-
-A job that fails can be re-run. A version that is already on RubyGems is skipped, not pushed again.
-
-From a laptop, when CI can't: `rake release:gem`. It skips a version that is up already too.
-
-## One-time setup
-
-**RubyGems.** On rubygems.org: your profile → Trusted publishers → Create a pending trusted publisher. Gem `sossego`, repository `julik/sossego`, workflow `release.yml`, environment `release`. A pending publisher works for a gem that has never been pushed.
-
-**GitHub.** The workflow's publishing job runs in the `release` environment, which GitHub creates on first use. Add a required reviewer to it (Settings → Environments → release) if a pushed tag should wait for a click before publishing.
+The tag starts [the release workflow](.github/workflows/release.yml), which checks the tag against the versions, runs CI on it, and creates the GitHub release with the CHANGELOG section as its notes.
