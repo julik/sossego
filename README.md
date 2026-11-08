@@ -16,7 +16,7 @@ You should not need socket upgrades, separate authentication and a persisted cha
 * Visible and debuggable events in your dev console
 * A clear, _push only_ development model
 * They multiplex onto the HTTP/2 connection your browser already has
-* On servers like Falcon it will handle a ridiculous number of connections
+* On Falcon a process holds thousands of open streams, and the polling is what you size for
 * It just polls. No socket leakages, no connection exhaustion.
 * Works through proxies
 * Uses the same auth you already have (plus signed URLs)

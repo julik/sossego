@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A payload format is registered with `Sossego.register_fmt(fmt, encoder:, decoder:)`, both halves at once, and removed with `unregister_fmt`. `Sossego.encoders` and `Sossego.decoders` are frozen now. They are built when the gem loads and made shareable, so the wire layer - `envelope`, `format_event_frame`, `decode_frame`, the registries - runs in any Ractor; a format whose lambdas have an unshareable self (one written at the top level of an initializer) keeps the registries on the main Ractor. The streaming body stays there regardless: it reads through Active Record.
+- The manual says how to serve streams from Falcon (fiber isolation, no reloading) and what one process can hold, measured: 1,000 streams at two thirds of a core, saturation around 3,500 on the default poll interval.
+- `require "sossego"` works outside a Rails application: the engine needs Action Dispatch, which is now required.
+
 ## 0.1.0
 
 - First release. Sossego as extracted from Moneymaker and Cora: the events table, the streaming body, signed streams, the job helpers, and the JavaScript client with its Stimulus, React and highlight add-ons.

@@ -14,3 +14,6 @@ gem "stimulus-rails"
 # The test for the engine exposing the packages to assiette. From Git until
 # a release has AssetHandler#expose.
 gem "assiette", github: "julik/assiette", group: :test
+
+# Serving the dummy app from Falcon, and the load client: test/dummy/falcon
+gem "falcon", group: :development

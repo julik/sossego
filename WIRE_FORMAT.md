@@ -87,7 +87,7 @@ The SSE specification reserves nothing; the reservation is Sossego's, enforced o
 - `fmt` says what the published value *is* (a JSON value, text, bytes) and, with the `gz:` prefix, that it travels gzipped. Both sides register all six.
 - The kind is fixed at publish and stored with the row (section 7): `text` for a String, `ejson` for anything else, unless the publisher names a `fmt`. Bytes are never guessed from a String's encoding; they are published with `fmt: "bytes"`. Nothing is inferred from the content of a String, so text that looks like JSON stays text.
 - Gzip is chosen at publish (`fmt: "gz:text"`, stored compressed) or when a frame is written: a body with `compress_above_bytes` turns an `ejson`, `text` or `bytes` row whose `pld` is at least that many bytes of JSON into its `gz:` variant. A row stored with a `gz:` fmt goes out as stored.
-- Encodings are a registry on both sides: `Sossego.encoders[fmt]` and `Sossego.decoders[fmt]` in Ruby, `registerPayloadDecoder(fmt, fn)` in the client. A new encoding is a registry entry on both sides, not a wire change. The server writes only formats it has an encoder for.
+- Encodings are a registry on both sides: `Sossego.register_fmt(fmt, encoder:, decoder:)` in Ruby, `registerPayloadDecoder(fmt, fn)` in the client. A new encoding is a registry entry on both sides, not a wire change. The server writes only formats it has an encoder for.
 - A client decoder may be asynchronous (gzip in browsers is, through `DecompressionStream`); the client still delivers frames in wire order.
 - An unknown or missing `fmt` is an error on both sides. Neither side guesses.
 - Transport frames (`ping`, `close`) are always `ejson`.

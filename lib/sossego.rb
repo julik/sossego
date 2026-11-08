@@ -7,6 +7,7 @@ require "stringio"
 require "active_support"
 require "active_support/core_ext"
 require "rails/engine"
+require "action_dispatch"
 require "action_view"
 
 require_relative "sossego/version"
@@ -187,36 +188,82 @@ module Sossego
   # goes into the envelope's `pld`. {Event.publish} runs the value through
   # one and stores the result, so a stored row is already in wire form.
   #
-  # @example Register another encoding (and its decoder, and the client's)
-  #   Sossego.encoders["msgpack"] = ->(value) { Base64.strict_encode64(MessagePack.pack(value)) }
+  # Frozen: add a format with {register_fmt}.
   #
   # @return [Hash{String => #call}]
-  def self.encoders
-    @encoders ||= {
-      FMT_EJSON => ->(value) { value },
-      FMT_TEXT => ->(value) { utf8_text(value) },
-      FMT_BYTES => ->(value) { Base64.strict_encode64(value.to_s.b) },
-      "#{GZIP_PREFIX}#{FMT_EJSON}" => ->(value) { Base64.strict_encode64(gzip(JSON.generate(value.as_json))) },
-      "#{GZIP_PREFIX}#{FMT_TEXT}" => ->(value) { Base64.strict_encode64(gzip(utf8_text(value))) },
-      "#{GZIP_PREFIX}#{FMT_BYTES}" => ->(value) { Base64.strict_encode64(gzip(value.to_s.b)) }
-    }
-  end
+  def self.encoders = @encoders
 
   # Decoders by `fmt`. Each takes `pld` as parsed from the envelope and
   # returns the application's value: what was published, with Hash keys as
   # strings, and bytes as a binary String.
   #
+  # Frozen: add a format with {register_fmt}.
+  #
   # @return [Hash{String => #call}]
-  def self.decoders
-    @decoders ||= {
-      FMT_EJSON => ->(pld) { pld },
-      FMT_TEXT => ->(pld) { pld },
-      FMT_BYTES => ->(pld) { Base64.strict_decode64(pld) },
-      "#{GZIP_PREFIX}#{FMT_EJSON}" => ->(pld) { JSON.parse(gunzip(pld)) },
-      "#{GZIP_PREFIX}#{FMT_TEXT}" => ->(pld) { gunzip(pld).force_encoding(::Encoding::UTF_8) },
-      "#{GZIP_PREFIX}#{FMT_BYTES}" => ->(pld) { gunzip(pld) }
-    }
+  def self.decoders = @decoders
+
+  # Registers a payload format: how a value becomes `pld`, and `pld` the
+  # value again. The client needs the decoder too (`registerPayloadDecoder`).
+  #
+  # The registries are shared with every Ractor as long as everything in
+  # them can be: a lambda written in a module body, as below, can; one
+  # written at the top level of an initializer has `main` for its self and
+  # cannot, and from then on only the main Ractor reads the registries.
+  #
+  # @example
+  #   module MsgpackFmt
+  #     ENCODE = ->(value) { Base64.strict_encode64(MessagePack.pack(value)) }
+  #     DECODE = ->(pld) { MessagePack.unpack(Base64.strict_decode64(pld)) }
+  #   end
+  #   Sossego.register_fmt("msgpack", encoder: MsgpackFmt::ENCODE, decoder: MsgpackFmt::DECODE)
+  #
+  # @param fmt [String, Symbol]
+  # @param encoder [#call] takes the value, returns `pld`
+  # @param decoder [#call] takes `pld`, returns the value
+  # @return [String] the fmt
+  def self.register_fmt(fmt, encoder:, decoder:)
+    fmt = fmt.to_s
+    @encoders = shareable(@encoders.merge(fmt => encoder))
+    @decoders = shareable(@decoders.merge(fmt => decoder))
+    fmt
   end
+
+  # Removes a format registered with {register_fmt}.
+  #
+  # @param fmt [String, Symbol]
+  # @return [void]
+  def self.unregister_fmt(fmt)
+    @encoders = shareable(@encoders.except(fmt.to_s))
+    @decoders = shareable(@decoders.except(fmt.to_s))
+  end
+
+  # Deep-frozen and readable from any Ractor, or only frozen when something
+  # in it, a lambda with an unshareable self, cannot be shared
+  #
+  # @api private
+  def self.shareable(registry)
+    Ractor.make_shareable(registry)
+  rescue Ractor::IsolationError
+    registry.freeze
+  end
+
+  @encoders = shareable({
+    FMT_EJSON => ->(value) { value },
+    FMT_TEXT => ->(value) { utf8_text(value) },
+    FMT_BYTES => ->(value) { Base64.strict_encode64(value.to_s.b) },
+    "#{GZIP_PREFIX}#{FMT_EJSON}" => ->(value) { Base64.strict_encode64(gzip(JSON.generate(value.as_json))) },
+    "#{GZIP_PREFIX}#{FMT_TEXT}" => ->(value) { Base64.strict_encode64(gzip(utf8_text(value))) },
+    "#{GZIP_PREFIX}#{FMT_BYTES}" => ->(value) { Base64.strict_encode64(gzip(value.to_s.b)) }
+  })
+
+  @decoders = shareable({
+    FMT_EJSON => ->(pld) { pld },
+    FMT_TEXT => ->(pld) { pld },
+    FMT_BYTES => ->(pld) { Base64.strict_decode64(pld) },
+    "#{GZIP_PREFIX}#{FMT_EJSON}" => ->(pld) { JSON.parse(gunzip(pld)) },
+    "#{GZIP_PREFIX}#{FMT_TEXT}" => ->(pld) { gunzip(pld).force_encoding(::Encoding::UTF_8) },
+    "#{GZIP_PREFIX}#{FMT_BYTES}" => ->(pld) { gunzip(pld) }
+  })
 
   # The `fmt` a payload is published as when none is given: `text` for a
   # String, `ejson` for anything else. Bytes are never guessed at, since a

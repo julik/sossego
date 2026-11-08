@@ -30,11 +30,24 @@ class SossegoTest < ActiveSupport::TestCase
   end
 
   test "envelope runs pld through the encoder fmt names" do
-    Sossego.encoders["upcase"] = ->(value) { value.to_s.upcase }
+    Sossego.register_fmt("upcase", encoder: ->(value) { value.to_s.upcase }, decoder: ->(pld) { pld.downcase })
 
     assert_equal "HELLO", Sossego.envelope(fmt: "upcase", evt: "x", pld: "hello")[:pld]
   ensure
-    Sossego.encoders.delete("upcase")
+    Sossego.unregister_fmt("upcase")
+  end
+
+  test "the format registries are frozen, and register_fmt adds to both" do
+    assert_raises(FrozenError) { Sossego.encoders["x"] = ->(value) { value } }
+    assert_raises(FrozenError) { Sossego.decoders["x"] = ->(pld) { pld } }
+
+    Sossego.register_fmt(:upcase, encoder: ->(value) { value.to_s.upcase }, decoder: ->(pld) { pld.downcase })
+    assert_equal "HELLO", Sossego.encoders.fetch("upcase").call("hello")
+    assert_equal "hello", Sossego.decoders.fetch("upcase").call("HELLO")
+
+    Sossego.unregister_fmt(:upcase)
+    refute Sossego.encoders.key?("upcase")
+    refute Sossego.decoders.key?("upcase")
   end
 
   test "envelope raises on an unregistered fmt" do
@@ -54,11 +67,11 @@ class SossegoTest < ActiveSupport::TestCase
   end
 
   test "decode_frame runs pld through the decoder fmt names" do
-    Sossego.decoders["upcase"] = ->(pld) { pld.upcase }
+    Sossego.register_fmt("upcase", encoder: ->(value) { value.to_s.downcase }, decoder: ->(pld) { pld.upcase })
 
     assert_equal "HELLO", Sossego.decode_frame(%({"fmt": "upcase", "evt": "x", "pld": "hello"}))["pld"]
   ensure
-    Sossego.decoders.delete("upcase")
+    Sossego.unregister_fmt("upcase")
   end
 
   test "decode_frame raises on an unknown fmt" do

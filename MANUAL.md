@@ -174,6 +174,10 @@ It inherits from `ActionController::Base`, not your `ApplicationController`. A s
 
 **Threads.** An open stream holds a Puma thread for up to 30 seconds. Streams mark themselves IO-bound, so set Puma's `max_io_threads` and they won't take the threads that serve pages. Use the same number for `max_open_streams`. Over HTTP/1.1 a browser opens at most 6 connections per site, and each open stream uses one, so serve over HTTP/2 if pages keep several streams open.
 
+**Falcon.** The stream is a plain Rack body, so Falcon serves it as it is: a fiber per connection, and the `sleep` between polls yields to the other connections. Two settings matter. `config.active_support.isolation_level = :fiber`, so Rails keeps its per-request state, the connection pool's leases among it, per fiber. And `config.enable_reloading = false`, as in production: the reloading interlock keeps its accounts per thread, and fibers sharing a thread confuse it until polls time out on the connection pool. Falcon drops the `Connection: keep-alive` header and logs a warning per response; the header is redundant on HTTP/1.1 and not allowed on HTTP/2.
+
+What bounds a Falcon process is polling, not connections: every open stream runs its query every `poll_interval_s`, so a process polls `streams / poll_interval_s` times a second. Measured on a laptop with PostgreSQL, one process held 1,000 streams on the default quarter second at two thirds of a core and a pool of 50 connections busy throughout, and an event reached all 1,000 within half a second. The core saturated at about 3,500 open streams, where an event took two seconds to reach them all, and the process grew to about 6,000 open streams while accepting new connections slowly, at about 180 KB of memory per stream. For 10,000 streams: a longer `poll_interval_s`, as many processes as cores (`falcon serve --count`), and a connection pool sized for the polls.
+
 **Signed streams.** The engine serves any stream to a request with a valid signature, at `/sossego/streams/:stream_id?sig=…`. `sossego_signed_stream_path(stream)` and `sossego_signed_stream_url(stream)` build the URL. This suits [one-off streams](README.md#one-off-named-streams), and also a stream you'd rather hand out than authorize per request, as InertiaCable does (see [Using with React](#using-with-react)). These connections replay everything retained, so work started before the page connected is not missed.
 
 ## Configuration
@@ -374,7 +378,7 @@ stream.close()
 - **Handlers can change:** `events` is read for each event, so adding or replacing a key on the same object takes effect from the next event. Each stream has its own handlers.
 - **Cursors** are strings. Compare them only with `compareCursors(a, b)` and `maxCursor(a, b)`, never with `<` or `Number()`.
 - **Resilience:** the client reopens a connection that goes quiet for 25 s. When the browser gives up on a connection, the client reopens it with a backoff from 3 s to 60 s. The `close` frame is the only thing that stops it.
-- **Formats:** custom payload formats register on both sides: `registerPayloadDecoder(fmt, fn)` here, `Sossego.encoders` / `Sossego.decoders` in Ruby.
+- **Formats:** custom payload formats register on both sides: `registerPayloadDecoder(fmt, fn)` here, `Sossego.register_fmt(fmt, encoder:, decoder:)` in Ruby.
 
 ## Stimulus
 
@@ -721,7 +725,7 @@ What you get from that:
 
 What it costs:
 
-- **A thread per open stream.** Puma holds one for each open stream, for up to 30 seconds at a time. That's fine for hundreds of open streams per process; for many thousands you'd want a different server model. `max_io_threads` and `max_open_streams` keep streams from crowding out page requests.
+- **A thread per open stream.** Puma holds one for each open stream, for up to 30 seconds at a time. That's fine for hundreds of open streams per process; for thousands, Falcon holds a fiber instead, and polling becomes the bound (see [Serving streams](#serving-streams)). `max_io_threads` and `max_open_streams` keep streams from crowding out page requests.
 - **Polling.** Each stream polls its rows, a quarter second apart by default. That's a cheap indexed query, but it is latency, and load that grows with the number of open streams. An event takes up to `poll_interval_s` to arrive.
 - **One direction.** For chatty two-way traffic (collaborative cursors, presence, games), a WebSocket is the right tool.
 - **HTTP/1.1 limits a browser to 6 connections per site.** Serve over HTTP/2 when pages keep streams open.
